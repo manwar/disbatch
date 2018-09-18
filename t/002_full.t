@@ -23,7 +23,7 @@ use Disbatch::Web;
 my $use_ssl = $ENV{USE_SSL} // 1;
 my $use_auth = $ENV{USE_AUTH} // 1;
 
-unless ($ENV{AUTHOR_TESTING}) {
+if (!$ENV{AUTHOR_TESTING} or $ENV{SKIP_FULL_TESTS}) {
     plan skip_all => 'Skipping author tests';
     exit;
 }
