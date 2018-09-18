@@ -97,6 +97,7 @@ window.onload = function() {
     { name: "id", label: "ID", datatype: "string", editable: false},
     { name: "node", label: "Node", datatype: "string", editable: false},
     { name: "maxthreads", label: "Max Threads", datatype: "integer", editable: true},
+    { name: "timestamp", label: "Timestamp", datatype: "string", editable: false},
   ];
   getJSON('/plugins', function(plugins) {
     queueLayout[1].values = {};
@@ -121,7 +122,17 @@ window.onload = function() {
   var nodesContainerid = 'nodes-table';
   var nodesTableid = 'nodes';
   var loadNodes = function() {
-    getJSON("/nodes", function(data) { load(nodesGrid, nodeLayout, data); render(nodesGrid, nodesContainerid, className, nodesTableid); });
+    //if (new Date(1534782740217+900000) < new Date()) { print("old") }
+    getJSON("/nodes", function(data) {
+      var data2 = [];
+      data.forEach(function (n) {
+        //n.timestamp = new Date(n.timestamp)
+        if (new Date(n.timestamp+900000) >= new Date()) {
+            // within the last 15 minutes
+            data2.push(n);
+        }
+      })
+      console.log(JSON.stringify(data)); load(nodesGrid, nodeLayout, data2); render(nodesGrid, nodesContainerid, className, nodesTableid); });
   }
   loadQueuesAndNodes = function() { loadQueues(); loadNodes(); }	// no var because needed for Refresh button
   newQueue = function() {		// no var because needed for New Queue button
