@@ -156,7 +156,7 @@ task_runner - run a single Disbatch task
 
 =head1 SYNOPSIS
 
-  task_runner --plugin Disbatch::Plugin::Demo --task 565bc0d43fb6ecd1c8504492 --config etc/disbatch/config.json
+  task_runner --task 565bc0d43fb6ecd1c8504492 --config etc/disbatch/config.json
 
 =head1 ARGUMENTS
 
@@ -169,10 +169,6 @@ Path to the JSON Disbatch config file.
 =item --task <string>
 
 The task's _id. Mandatory.
-
-=item --plugin <string>
-
-The name of the plugin to use. Mandatory.
 
 =item --gfs [<string>]
 
