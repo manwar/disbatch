@@ -215,18 +215,18 @@ sub update_node_status {
 sub claim_task {
     my ($self, $queue) = @_;
 
-    $self->{sort} //= 'default';
+    $queue->{sort} //= 'default';
 
     my $query  = { '$or' => [{node => undef}, {node => -1}], status => -2, queue => $queue->{_id} };
     my $update = { '$set' => {node => $self->{node}, status => -1, mtime => Time::Moment->now_utc} };
 
     my $options;
-    if ($self->{sort} eq 'fifo') {
+    if ($queue->{sort} eq 'fifo') {
         $options->{sort} = { _id => 1 };
-    } elsif ($self->{sort} eq 'lifo') {
+    } elsif ($queue->{sort} eq 'lifo') {
         $options->{sort} = { _id => -1 };
-    } elsif ($self->{sort} ne 'default') {
-        $self->logger->warn("$queue->{name}: unknown sort order '$self->{sort}' -- using default");
+    } elsif ($queue->{sort} ne 'default') {
+        $self->logger->warn("$queue->{name}: unknown sort order '$queue->{sort}' -- using default");
     }
     $self->{claimed_task} = try { $self->tasks->find_one_and_update($query, $update, $options) } catch { $self->logger->error("Could not claim task: $_"); undef };
 }
