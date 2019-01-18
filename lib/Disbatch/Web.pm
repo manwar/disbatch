@@ -58,18 +58,6 @@ sub get_nodes {
     \@nodes;
 }
 
-=item GET /nodes
-
-Parameters: none.
-
-Returns an Array of node Objects defined (with C<id> the stringified C<_id>) on success, C<< { "error": "Could not get current nodes: $_" } >> on error.
-
-Sets HTTP status to C<400> on error.
-
-Note: new in Disbatch 4
-
-=cut
-
 get '/nodes' => sub {
     undef $disbatch->{mongo};
     my $nodes = try { get_nodes } catch { status 400; "Could not get current nodes: $_" };
@@ -79,20 +67,6 @@ get '/nodes' => sub {
     }
     send_json $nodes, convert_blessed => 1;
 };
-
-=item GET /nodes/:node
-
-URL: C<:node> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<node> name if it does not.
-
-Parameters: none.
-
-Returns node Object (with C<id> the stringified C<_id>) on success, C<< { "error": "Could not get node $node: $_" } >> on error.
-
-Sets HTTP status to C<400> on error.
-
-Note: new in Disbatch 4
-
-=cut
 
 get qr'^/nodes/(?<node>.+)' => sub {
     undef $disbatch->{mongo};
@@ -104,22 +78,6 @@ get qr'^/nodes/(?<node>.+)' => sub {
     }
     send_json $node->[0], convert_blessed => 1;
 };
-
-=item POST /nodes/:node
-
-URL: C<:node> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<node> name if it does not.
-
-Parameters: C<< { "maxthreads": maxthreads } >>
-
-"maxthreads" is a non-negative integer or null
-
-Returns C<< { ref $res: Object } >> or C<< { ref $res: Object, "error": error_string_or_reponse_object } >>
-
-Sets HTTP status to C<400> on error.
-
-Note: new in Disbatch 4
-
-=cut
 
 #  postJSON('/nodes/' + row.rowId , { maxthreads: newValue}, loadQueues);
 post qr'^/nodes/(?<node>.+)' => sub {
@@ -163,36 +121,10 @@ post qr'^/nodes/(?<node>.+)' => sub {
     send_json $reponse;
 };
 
-=item GET /plugins
-
-Parameters: none.
-
-Returns an Array of allowed plugin names.
-
-Should never fail.
-
-Note: replaces /queue-prototypes-json
-
-=cut
-
 # This is needed at least to create queues in the web interface.
 get '/plugins' => sub {
     send_json $disbatch->{config}{plugins};
 };
-
-=item GET /queues
-
-Parameters: none.
-
-Returns an Array of queue Objects on success, C<< { "error": "Could not get current queues: $_" } >> on error.
-
-Each item has the following keys: id, plugin, name, threads, queued, running, completed
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /scheduler-json
-
-=cut
 
 get '/queues' => sub {
     undef $disbatch->{mongo};
@@ -203,20 +135,6 @@ get '/queues' => sub {
     }
     send_json $queues;
 };
-
-=item GET /queues/:queue
-
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
-
-Parameters: none.
-
-Returns a queue Object on success, C<< { "error": "Could not get current queues: $_" } >> on error.
-
-Each item has the following keys: id, plugin, name, threads, queued, running, completed
-
-Sets HTTP status to C<400> on error.
-
-=cut
 
 get qr'^/queues/(?<queue>.+)$' => sub {
     undef $disbatch->{mongo};
@@ -235,24 +153,6 @@ sub map_plugins {
     my %plugins = map { $_ => 1 } @{$disbatch->{config}{plugins}};
     \%plugins;
 }
-
-=item POST /queues
-
-Create a new queue.
-
-Parameters: C<< { "name": name, "plugin": plugin } >>
-
-C<name> is the desired name for the queue (must be unique), C<plugin> is the plugin name for the queue.
-
-Returns: C<< { ref $res: Object, "id": $inserted_id } >> on success; C<< { "error": "name and plugin required" } >>,
-C<< { "error": "Invalid param", "param": $param } >>, or C<< { "error": "Unknown plugin", "plugin": $plugin } >> on input error; or
-C<< { ref $res: Object, "id": null, "error": "$res" } >> on MongoDB error.
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /start-queue-json
-
-=cut
 
 post '/queues' => sub {
     undef $disbatch->{mongo};
@@ -285,23 +185,6 @@ post '/queues' => sub {
     }
     send_json $reponse, convert_blessed => 1;
 };
-
-=item POST /queues/:queue
-
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
-
-Parameters: C<< { "name": name, "plugin": plugin, "threads": threads } >>
-
-C<name> is the new name for the queue (must be unique), C<plugin> is the new plugin name for the queue (must be defined in the config file), 
-C<threads> must be a non-negative integer. Only one of C<name>, C<plugin>, and  C<threads> is required, but any combination is allowed.
-
-Returns C<< { ref $res: Object } >> or C<< { "error": error } >>
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /set-queue-attr-json
-
-=cut
 
 post qr'^/queues/(?<queue>.+)$' => sub {
     my $queue = $+{queue};
@@ -349,22 +232,6 @@ post qr'^/queues/(?<queue>.+)$' => sub {
     send_json $reponse;
 };
 
-=item DELETE /queues/:queue
-
-Deletes the specified queue.
-
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
-
-Parameters: none
-
-Returns: C<< { ref $res: Object } >> on success, or C<< { ref $res: Object, "error": "$res" } >> on error.
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /delete-queue-json
-
-=cut
-
 del qr'^/queues/(?<queue>.+)$' => sub {
     undef $disbatch->{mongo};
 
@@ -409,33 +276,6 @@ sub create_tasks {
     my $res = try { $disbatch->tasks->insert_many(\@tasks) } catch { Limper::warning "Could not create tasks: $_"; $_ };
     $res;
 }
-
-=item POST /tasks/search
-
-Parameters: C<< { "filter": filter, "options": options, "count": count, "terse": terse } >>
-
-All parameters are optional.
-
-C<filter> is a filter expression (query) object.
-
-C<options> is an object of desired options to L<MongoDB::Collection#find>.
-
-If not set, C<options.limit> will be C<100>. This will fail if you try to set it above C<100>.
-
-C<count> is a boolean. Instead of an array of task documents, the count of task documents matching the query will be returned.
-
-C<terse> is a boolean. If C<true>, the the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
-If C<false>, the full content of C<stdout> and C<stderr> will be returned. Default is C<true>.
-
-Returns: Array of task Objects or C<< { "count": $count } >> on success; C<< { "error": "filter and options must be name/value objects" } >>,
-C<< { "error": "limit cannot exceed 100" } >>, or C<< { "error": "Bad OID passed: $error" } >> on input error;
-or C<< { "error": "$error" } >> on count or search error.
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /search-tasks-json
-
-=cut
 
 # FIXME: I don't like this URL.
 # see https://metacpan.org/pod/MongoDB::Collection#find
@@ -505,21 +345,6 @@ post '/tasks/search' => sub {
     send_json \@tasks, convert_blessed => 1, pretty => $params->{pretty};
 };
 
-=item POST /tasks/:queue
-
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
-
-Parameters: an array of task params objects
-
-Returns: C<< { ref $res: Object } >> on success; C<< { "error": "params must be a JSON array of task params" } >>
-or C<< { "error": "queue not found" } >> on input error;  or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /queue-create-tasks-json
-
-=cut
-
 post qr'^/tasks/(?<queue>[^/]+)$' => sub {
     undef $disbatch->{mongo};
     my $params = parse_params;
@@ -549,26 +374,6 @@ post qr'^/tasks/(?<queue>[^/]+)$' => sub {
     }
     send_json $reponse, convert_blessed => 1;
 };
-
-=item POST /tasks/:queue/:collection
-
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not. C<:collection> is a MongoDB collection name.
-
-Parameters: C<< { "filter": filter, "params": params } >>
-
-C<filter> is a filter expression (query) object for the C<:collection> collection.
-
-C<params> is an object of task params. To insert a document value from a query into the params, prefix the desired key name with C<document.> as a value.
-
-Returns: C<< { ref $res: Object } >> on success; C<< { "error": "filter and params required and must be name/value objects" } >>
-or C<< { "error": "queue not found" } >> on input error; C<< { "error": "Could not iterate on collection $collection: $error" } >> on query error,
-or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
-
-Sets HTTP status to C<400> on error.
-
-Note: replaces /queue-create-tasks-from-query-json
-
-=cut
 
 post qr'^/tasks/(?<queue>.+?)/(?<collection>.+)$' => sub {
     undef $disbatch->{mongo};
@@ -1005,6 +810,177 @@ Returns: the repsonse object from a C<MongoDB::Collection#insert_many> request.
 =head1 JSON ROUTES
 
 =over 2
+
+=item GET /nodes
+
+Parameters: none.
+
+Returns an Array of node Objects defined (with C<id> the stringified C<_id>) on success, C<< { "error": "Could not get current nodes: $_" } >> on error.
+
+Sets HTTP status to C<400> on error.
+
+Note: new in Disbatch 4
+
+=item GET /nodes/:node
+
+URL: C<:node> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<node> name if it does not.
+
+Parameters: none.
+
+Returns node Object (with C<id> the stringified C<_id>) on success, C<< { "error": "Could not get node $node: $_" } >> on error.
+
+Sets HTTP status to C<400> on error.
+
+Note: new in Disbatch 4
+
+=item POST /nodes/:node
+
+URL: C<:node> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<node> name if it does not.
+
+Parameters: C<< { "maxthreads": maxthreads } >>
+
+"maxthreads" is a non-negative integer or null
+
+Returns C<< { ref $res: Object } >> or C<< { ref $res: Object, "error": error_string_or_reponse_object } >>
+
+Sets HTTP status to C<400> on error.
+
+Note: new in Disbatch 4
+
+=item GET /plugins
+
+Parameters: none.
+
+Returns an Array of allowed plugin names.
+
+Should never fail.
+
+Note: replaces /queue-prototypes-json
+
+=item GET /queues
+
+Parameters: none.
+
+Returns an Array of queue Objects on success, C<< { "error": "Could not get current queues: $_" } >> on error.
+
+Each item has the following keys: id, plugin, name, threads, queued, running, completed
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /scheduler-json
+
+=item GET /queues/:queue
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
+
+Parameters: none.
+
+Returns a queue Object on success, C<< { "error": "Could not get current queues: $_" } >> on error.
+
+Each item has the following keys: id, plugin, name, threads, queued, running, completed
+
+Sets HTTP status to C<400> on error.
+
+=item POST /queues
+
+Create a new queue.
+
+Parameters: C<< { "name": name, "plugin": plugin } >>
+
+C<name> is the desired name for the queue (must be unique), C<plugin> is the plugin name for the queue.
+
+Returns: C<< { ref $res: Object, "id": $inserted_id } >> on success; C<< { "error": "name and plugin required" } >>,
+C<< { "error": "Invalid param", "param": $param } >>, or C<< { "error": "Unknown plugin", "plugin": $plugin } >> on input error; or
+C<< { ref $res: Object, "id": null, "error": "$res" } >> on MongoDB error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /start-queue-json
+
+=item POST /queues/:queue
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
+
+Parameters: C<< { "name": name, "plugin": plugin, "threads": threads } >>
+
+C<name> is the new name for the queue (must be unique), C<plugin> is the new plugin name for the queue (must be defined in the config file), 
+C<threads> must be a non-negative integer. Only one of C<name>, C<plugin>, and  C<threads> is required, but any combination is allowed.
+
+Returns C<< { ref $res: Object } >> or C<< { "error": error } >>
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /set-queue-attr-json
+
+=item DELETE /queues/:queue
+
+Deletes the specified queue.
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
+
+Parameters: none
+
+Returns: C<< { ref $res: Object } >> on success, or C<< { ref $res: Object, "error": "$res" } >> on error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /delete-queue-json
+
+=item POST /tasks/search
+
+Parameters: C<< { "filter": filter, "options": options, "count": count, "terse": terse } >>
+
+All parameters are optional.
+
+C<filter> is a filter expression (query) object.
+
+C<options> is an object of desired options to L<MongoDB::Collection#find>.
+
+If not set, C<options.limit> will be C<100>. This will fail if you try to set it above C<100>.
+
+C<count> is a boolean. Instead of an array of task documents, the count of task documents matching the query will be returned.
+
+C<terse> is a boolean. If C<true>, the the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
+If C<false>, the full content of C<stdout> and C<stderr> will be returned. Default is C<true>.
+
+Returns: Array of task Objects or C<< { "count": $count } >> on success; C<< { "error": "filter and options must be name/value objects" } >>,
+C<< { "error": "limit cannot exceed 100" } >>, or C<< { "error": "Bad OID passed: $error" } >> on input error;
+or C<< { "error": "$error" } >> on count or search error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /search-tasks-json
+
+=item POST /tasks/:queue
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
+
+Parameters: an array of task params objects
+
+Returns: C<< { ref $res: Object } >> on success; C<< { "error": "params must be a JSON array of task params" } >>
+or C<< { "error": "queue not found" } >> on input error;  or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /queue-create-tasks-json
+
+=item POST /tasks/:queue/:collection
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not. C<:collection> is a MongoDB collection name.
+
+Parameters: C<< { "filter": filter, "params": params } >>
+
+C<filter> is a filter expression (query) object for the C<:collection> collection.
+
+C<params> is an object of task params. To insert a document value from a query into the params, prefix the desired key name with C<document.> as a value.
+
+Returns: C<< { ref $res: Object } >> on success; C<< { "error": "filter and params required and must be name/value objects" } >>
+or C<< { "error": "queue not found" } >> on input error; C<< { "error": "Could not iterate on collection $collection: $error" } >> on query error,
+or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces /queue-create-tasks-from-query-json
 
 =back
 
