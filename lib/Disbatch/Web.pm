@@ -26,6 +26,16 @@ sub init {
     $disbatch = Disbatch->new(class => 'Disbatch::Web', config_file => ($args->{config_file} // '/etc/disbatch/config.json'));
     $disbatch->load_config;
     public ($disbatch->{config}{web_root} // '/etc/disbatch/htdocs/');
+    for my $plugin (@{$disbatch->{config}{web_extensions} // []}) {
+        if ($plugin !~ /^[\w:]+$/) {
+            $disbatch->logger->error("Illegal plugin value: $plugin, ignored");
+        } elsif (eval "require $plugin") {
+            $disbatch->logger->info("$plugin found and loaded");
+        } else {
+            $disbatch->logger->warn("Could not load $plugin, ignored");
+        }
+    }
+    require Disbatch::Web::Files;	# this has a catch-all to send any matching file in the public root directory, so must be loaded last.
 }
 
 sub parse_params {
@@ -733,16 +743,6 @@ post '/search-tasks-json' => sub {
     send_json \@tasks, convert_blessed => 1;
 };
 
-# MUST BE AT END
-
-get '/' => sub {
-    send_file '/index.html';
-};
-
-get qr{^/} => sub {
-    send_file request->{path};        # sends request->{uri} by default
-};
-
 1;
 
 __END__
@@ -984,7 +984,15 @@ Note: replaces /queue-create-tasks-from-query-json
 
 =back
 
+=head1 CUSTOM ROUTES
+
+You can set an array of package names to C<web_extensions> in the config file to load any custom routes. They are parsed in order after the above routes.
+Note that if a request which matches your custom route is also matched by an above route, your custom route will never be called.
+See L<Disbatch::Web::Files> for an example (that package is automatically loaded at the end, after any custom routes).
+
 =head1 BROWSER ROUTES
+
+Note: this are loaded from L<Disbatch::Web::Files>.
 
 =over 2
 
