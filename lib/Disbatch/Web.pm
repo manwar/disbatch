@@ -26,11 +26,12 @@ sub init {
     $disbatch = Disbatch->new(class => 'Disbatch::Web', config_file => ($args->{config_file} // '/etc/disbatch/config.json'));
     $disbatch->load_config;
     public ($disbatch->{config}{web_root} // '/etc/disbatch/htdocs/');
-    for my $plugin (@{$disbatch->{config}{web_extensions} // []}) {
+    for my $plugin (keys %{$disbatch->{config}{web_extensions} // {}}) {
         if ($plugin !~ /^[\w:]+$/) {
             $disbatch->logger->error("Illegal plugin value: $plugin, ignored");
         } elsif (eval "require $plugin") {
             $disbatch->logger->info("$plugin found and loaded");
+            $plugin->init($disbatch, $disbatch->{config}{web_extensions}{$plugin}) if $plugin->can('init');
         } else {
             $disbatch->logger->warn("Could not load $plugin, ignored");
         }
