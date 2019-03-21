@@ -108,8 +108,6 @@ Path to the JSON config file to set additional permissions for included roles. N
 
 If you have L<Disbatch::Web> load additional routes via C<config.web_extensions>, you may need to add permissions here.
 
-Note that C<POST /tasks/:id> and C<DELETE /tasks/:id> routes will not work without additional permissions. See file C<etc/disbatch/additional-permissions.json-example>.
-
 =item --create_root
 
 Will first create the root user in the C<admin> database. Optional.
