@@ -26,7 +26,7 @@ our @EXPORT = qw/ parse_params send_json_options template /;
 my $oid_keys = [ qw/ queue / ];	# NOTE: in addition to _id
 my $util = Disbatch::Web::Query->new();	# query()
 
-sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1, pretty => 0 }		# from remotecontrol/config.yml
+sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1 }
 
 # the following options should be compatible with previous Dancer usage:
 my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => 'views', START_TAG => '\[%', END_TAG => '%\]', WRAPPER => 'layouts/main.tt');
