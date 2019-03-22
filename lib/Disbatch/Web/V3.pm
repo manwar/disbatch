@@ -1,4 +1,4 @@
-package Disbatch::Web::Old;
+package Disbatch::Web::V3;
 
 use 5.12.0;
 use warnings;
@@ -311,7 +311,7 @@ post '/search-tasks-json' => sub {
 
 =head1 NAME
 
-Disbatch::Web::Old - Disbatch::Web routes for deprecated v3 API
+Disbatch::Web::V3 - Disbatch::Web routes for deprecated v3 API
 
 =head1 DEPRECATION NOTICE
 

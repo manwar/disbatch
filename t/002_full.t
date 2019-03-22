@@ -69,7 +69,7 @@ my $config = {
     plugins => [ 'Disbatch::Plugin::Demo' ],
     web_extensions => {
         #"Disbatch::Web::Tasks" => undef,	# deprecated v4 routes: POST /tasks/search, POST /tasks/:queue, POST /tasks/:queue/:collection
-        #"Disbatch::Web::Old" => undef,		# deprecated v3 routes: *-json, not tested
+        #"Disbatch::Web::V3" => undef,		# deprecated v3 routes: *-json, not tested
     },
     web_root => 'etc/disbatch/htdocs/',
     task_runner => './bin/task_runner',
