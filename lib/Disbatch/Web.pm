@@ -766,6 +766,40 @@ Sets the C<balance> document fields given in the request parameters to the given
 
 Returns C<< { status => 'success: queuebalance modified' } >> on success, or C<< { status => 'failed: invalid json passed ' . $_ } >> with HTTP status of C<400> on error.
 
+=item check_disbatch
+
+Parameters: none
+
+Checks if Disbatch nodes exist and determines if any have been running within the last 60 seconds.
+
+Returns C<< { status => 'WARNING', message => 'No Disbatch nodes found' } >> if no nodes,
+C<< { status => 'OK', message => 'Disbatch is running on one or more nodes', nodes => $status } >> if at least one node recently running,
+or C<< { status => 'CRITICAL', message => 'No active Disbatch nodes found', nodes => $status } >> if not.
+On error, returns C<< { status => 'CRITICAL', message => "Could not get current Disbatch nodes: $_" } >>.
+
+=item check_queuebalance
+
+Parameters: none
+
+Checks if QueueBalance has been running within the last 60 seconds.
+
+Returns C<< { status => 'OK', message => 'queuebalance disabled' } >> if C<config.balance.enabled> is false.
+If the balance doc has C<status> of C<CRITICAL> and no C<timestamp>, returns C<< { status => 'CRITICAL', message => $message } >>.
+If the C<timestamp> value is older than 60 seconds, returns C<< { status => 'CRITICAL' , message => "queuebalanced not running for ${seconds}s" } >>.
+If the  C<status> value is not C<OK>, C<WARNING>, or  C<CRITICAL>, returns C<< { status => 'CRITICAL', message => 'queuebalanced unknown status', result => $doc } >>.
+Otherwise returns the doc: C<< { status => $status, message => $message, timestamp => $timestamp } >>.
+
+=item checks
+
+Parameters: none
+
+Checks the status of Disbatch and QueueBalance.
+
+If C<config.monitoring>, calls C<check_disbatch()> and C<check_queuebalance()>.
+
+Returns C<< { disbatch => check_disbatch() , queuebalance => check_queuebalance() } >> if C<config.monitoring> is true, otherwise
+C<< { disbatch => { status => 'OK', message => 'monitoring disabled' }, queuebalance => $checks->{queuebalance} = { status => 'OK', message => 'monitoring disabled' } } >>.
+
 =back
 
 =head1 JSON ROUTES
@@ -955,12 +989,13 @@ Returns JSON C<{"status":"success: queuebalance modified"}> on success, or C<{"s
 
 =item GET /monitoring
 
-Params: none
+Parameters: none
 
-Returns C<{"disbatch":{"status":status,"message":message},"queuebalance":{"status":qb_status,"message":qb_message}}>, where C<status> and C<qb_status> will be C<OK> or C<CRITICAL>
+Checks the status of Disbatch and QueueBalance.
 
-If C<config.monitoring> is false, status will be C<OK> and message will be C<monitoring disabled> for both.
-If C<config.balance.enabled> is false, status will be C<OK> and message will be C<queuebalance disabled> for C<queuebalance>.
+Monitoring is controlled by setting C<config.monitoring> and C<config.balance.enabled>.
+
+Returns as JSON the result of C<checks()>, documented above.
 
 =back
 
