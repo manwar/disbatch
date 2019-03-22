@@ -751,6 +751,22 @@ Creates one queued task document for the given queue _id per C<$tasks> entry. Ea
 
 Returns: the repsonse object from a C<MongoDB::Collection#insert_many> request.
 
+=item get_balance
+
+Parameters: none
+
+Returns a C<HASH> of the balance doc without the C<_id> field, with the following added:
+field C<known_queues> with value an C<ARRAY> of all existing queue names, field C<settings> with value the C<HASH> of C<config.balance>.
+If the balance doc does not exist, the field C<notice> with value C<balance document not found> is added.
+
+=item post_balance
+
+Parameters: none (but parses request parameters, see C<POST /balance> below)
+
+Sets the C<balance> document fields given in the request parameters to the given values.
+
+Returns C<< { status => 'success: queuebalance modified' } >> on success, or C<< { status => 'failed: invalid json passed ' . $_ } >> with HTTP status of C<400> on error.
+
 =back
 
 =head1 JSON ROUTES
@@ -920,17 +936,23 @@ Note: new in 4.2, replaces C<POST /tasks/:queue> and C<POST /tasks/:queue/:colle
 
 =item GET /balance
 
-Parameters: FIXME
+Parameters: none
 
-Returns FIXME
+Returns a web page to view and update Queue Balance settings if the C<Accept> header wants C<text/html>, otherwise returns a pretty JSON result of C<get_balance>
 
 =item POST /balance
 
-Parameters: FIXME
+Parameters: C<{ "max_tasks": max_tasks, "queues": queues, "disabled": disabled }>
 
-Returns FIXME
+C<max_tasks> is a C<HASH> where keys match C</^[*0-6] (?:[01]\d|2[0-3]):[0-5]\d$/> (that is, C<0..6> or C<*> for DOW, followed by a space and a 24-hour time) and values are non-negative integers.
 
-=back
+C<queues> is an C<ARRAY> of C<ARRAY>s of queue names which must exist
+
+C<disabled> is a timestamp which must be in the future (optional)
+
+Sets the C<balance> document fields given in the above parameters to the given values.
+
+Returns JSON C<{"status":"success: queuebalance modified"}> on success, or C<{"status":"failed: invalid json passed " . $_}> with HTTP status of C<400> on error.
 
 =item GET /monitoring
 
@@ -940,6 +962,8 @@ Returns C<{"disbatch":{"status":status,"message":message},"queuebalance":{"statu
 
 If C<config.monitoring> is false, status will be C<OK> and message will be C<monitoring disabled> for both.
 If C<config.balance.enabled> is false, status will be C<OK> and message will be C<queuebalance disabled> for C<queuebalance>.
+
+=back
 
 =head1 CUSTOM ROUTES
 
