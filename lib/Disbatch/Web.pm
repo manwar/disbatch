@@ -632,13 +632,12 @@ sub check_disbatch {
 }
 
 sub check_queuebalance {
-    my ($time_diff) = @_;
     return { status => 'OK', message => 'queuebalance disabled' } unless $disbatch->{config}{balance}{enabled};
     # FIXME: return some sort of OK status if 'balance' collection doesn't exist (no QueueBalance) or $qb below is undef
     my $qb = $disbatch->balance->find_one({}, {status => 1, message => 1, timestamp => 1, _id => 0});
     return $qb if $qb->{status} eq 'CRITICAL' and !exists $qb->{timestamp}; # error via _mongo()	# FIXME: this will never happen because rewrite (wait why??), but maybe should check for timestamp anyway
     my $timestamp = delete $qb->{timestamp};
-    return { status => 'CRITICAL' , message => 'queuebalanced not running for ' . (time - $timestamp) . 's' } if $timestamp < time - $time_diff;
+    return { status => 'CRITICAL' , message => 'queuebalanced not running for ' . (time - $timestamp) . 's' } if $timestamp < time - 60;
     return $qb if $qb->{status} =~ /^(?:OK|WARNING|CRITICAL)$/;
     return { status => 'CRITICAL', message => 'queuebalanced unknown status', result => $qb };
 }
@@ -647,7 +646,7 @@ sub checks {
     my $checks = {};
     if ($disbatch->{config}{monitoring}) {
         $checks->{disbatch} = check_disbatch();
-        $checks->{queuebalance} = check_queuebalance(60);	# FIXME: don't hardcode $time_diff (60) for queuebalance status?
+        $checks->{queuebalance} = check_queuebalance();
     } else {
         $checks->{disbatch} = { status => 'OK', message => 'monitoring disabled' };
         $checks->{queuebalance} = { status => 'OK', message => 'monitoring disabled' };
