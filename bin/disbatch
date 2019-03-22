@@ -217,11 +217,11 @@ sub post_tasks {	# <queue> <json_array>					# JSON array of task params objects
 # * 'ctime' and 'mtime' are like 1548272576.574
 # * 'stdout' and 'stderr' are "[terse mode]"
 # * curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:3002/tasks/search
-# GET /tasks.json
+# GET /tasks
 # * 'ctime' and 'mtime' are like 2019-01-23T19:42:56
 # * 'stdout' and 'stderr' are actual content
-# * curl 'http://localhost:3002/tasks.json?.pretty=1&status=1&.terse=1&.epoch=1'
-# * curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:3002/tasks.json
+# * curl 'http://localhost:3002/tasks?.pretty=1&status=1&.terse=1&.epoch=1'
+# * curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:3002/tasks
 
 # /home/awillis/git/disbatch/bin/disbatch --url http://localhost:3002 search '{"status":1}'
 # NOTE: options passed may include: .count .fields .limit .skip .terse .full .epoch .pretty
@@ -231,7 +231,7 @@ sub get_tasks {		# <filter>						# {filter: filter, options: options, count: cou
     $params = defined $params ? try { $_ = $json->decode($params); die unless ref eq 'HASH'; $_ } catch { die "Invalid filter is not a JSON object: '$params'\n" } : {};
     my $options = { '.count' => $count, '.fields' => $fields, '.limit' => $limit, '.skip' => $skip, '.terse' => ($terse // 0), '.full' => $full, '.epoch' => $epoch, '.pretty' => $pretty };
     my $data = $json->encode({ %$options, %$params });
-    my $response = $ua->get("$url/tasks.json", 'Content-Type' => 'application/json', Content => $data);
+    my $response = $ua->get("$url/tasks", 'Content-Type' => 'application/json', Content => $data);
     if ($response->is_success) {
         if ($count) {
             say $json->decode($response->decoded_content)->{count}, ' tasks';
@@ -239,7 +239,7 @@ sub get_tasks {		# <filter>						# {filter: filter, options: options, count: cou
             say $response->decoded_content;	# Array of task Objects
         }
     } else {
-        die "Error getting $url/tasks.json (", $response->status_line, '): ', $response->decoded_content, "\n";
+        die "Error getting $url/tasks (", $response->status_line, '): ', $response->decoded_content, "\n";
     }
 }
 
@@ -484,7 +484,7 @@ Error examples:
   $ disbatch tasks '[]'
   Invalid filter is not a JSON object: '[]'
   $ disbatch tasks '{"status":-2}'
-  Error getting http://localhost:3002/tasks.json (400 Bad Request): {"error":"non-indexed params given","indexes":[["id"],["node","status","queue","id"],["queue","status"]],"invalid_params":["status"],"path":"/tasks.json","title":"Disbatch Tasks Query"}
+  Error getting http://localhost:3002/tasks (400 Bad Request): {"error":"non-indexed params given","indexes":[["id"],["node","status","queue","id"],["queue","status"]],"invalid_params":["status"],"path":"/tasks","title":"Disbatch Tasks Query"}
 
 =cut
 

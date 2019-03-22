@@ -440,12 +440,12 @@ FIXME: in query.tt at least toggleGroup() should run at $(document).ready() when
 
 =cut
 
-# NOTE: handles .terse, .full, and .epoch for GET /tasks.json
+# NOTE: handles .terse, .full, and .epoch for GET /tasks
 # * 'ctime' and 'mtime' are like 2019-01-23T19:42:56, unless .epoch, which will make them hires epoch times (float)
 # * 'stdout' and 'stderr' are actual content, unless .terse for "[terse mode]" or .full to replace with gfs docs
 # * the following are equivalent:
-#   $ curl 'http://localhost:3002/tasks.json?.pretty=1&status=1&.terse=1&.epoch=1'
-#   $ curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:8080/tasks.json
+#   $ curl 'http://localhost:3002/tasks?.pretty=1&status=1&.terse=1&.epoch=1'
+#   $ curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:8080/tasks
 # * and get you a result like default POST /tasks/search:
 #   $ curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:8080/tasks/search
 # NOTE: i hate this, but it should maybe be here for backcompat
@@ -843,7 +843,7 @@ Sets HTTP status to C<400> on error.
 
 Note: replaces /delete-queue-json
 
-=item GET /tasks.json
+=item GET /tasks
 
 WARNING: everything in this section is for the old  C<POST /tasks/search>!
 
