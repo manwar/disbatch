@@ -544,23 +544,22 @@ sub get_balance {
 }
 
 sub post_balance {
-    my ($params, $options) = parse_params;
-    my $qb = $params;	# FIXME: WAT
+    my $params = parse_params;
 
     # TODO: make this not all hardcoded:
     my $error = try {
-        die join(',', sort keys %$qb) unless join(',', sort keys %$qb) =~ /^(?:disabled,)?max_tasks,queues$/;
+        die join(',', sort keys %$params) unless join(',', sort keys %$params) =~ /^(?:disabled,)?max_tasks,queues$/;
 
-        if (defined $qb->{disabled}) {
-            die unless $qb->{disabled} =~ /^\d+$/;
-            die if $qb->{disabled} and $qb->{disabled} < time;
+        if (defined $params->{disabled}) {
+            die unless $params->{disabled} =~ /^\d+$/;
+            die if $params->{disabled} and $params->{disabled} < time;
         }
 
-        die unless ref $qb->{queues} eq 'ARRAY';
-        ref $_ eq 'ARRAY' or die for @{$qb->{queues}};
+        die unless ref $params->{queues} eq 'ARRAY';
+        ref $_ eq 'ARRAY' or die for @{$params->{queues}};
         my @q;
         my @known_queues = $disbatch->queues->distinct("name")->all;
-        for my $q (@{$qb->{queues}}) {
+        for my $q (@{$params->{queues}}) {
             ref $_ and die ref $_ for @$q;
             /^[\w-]+$/ or die for @$q;
             for my $e (@$q) {
@@ -572,9 +571,9 @@ sub post_balance {
         die unless @q == keys %q;
         die unless join(',', sort @q) eq join(',', sort keys %q);
 
-        die unless ref $qb->{max_tasks} eq 'HASH';
-        /^\d+$/ or die for values %{$qb->{max_tasks}};
-        /^[*0-6] (?:[01]\d|2[0-3]):[0-5]\d$/ or die for keys %{$qb->{max_tasks}};
+        die unless ref $params->{max_tasks} eq 'HASH';
+        /^\d+$/ or die for values %{$params->{max_tasks}};
+        /^[*0-6] (?:[01]\d|2[0-3]):[0-5]\d$/ or die for keys %{$params->{max_tasks}};
         return undef;
     } catch {
         status 400;
@@ -582,9 +581,9 @@ sub post_balance {
     };
     return $error if defined $error;
 
-    $_ += 0 for values %{$qb->{max_tasks}};
+    $_ += 0 for values %{$params->{max_tasks}};
 
-    $disbatch->balance->update_one({}, {'$set' => $qb }, {upsert => 1});
+    $disbatch->balance->update_one({}, {'$set' => $params }, {upsert => 1});
     { status => 'success: queuebalance modified' };
 };
 
