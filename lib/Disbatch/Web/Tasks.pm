@@ -110,6 +110,54 @@ post qr'^/tasks/(?<queue>.+?)/(?<collection>.+)$' => sub {
 
 1;
 
+=encoding utf8
+
+=head1 NAME
+
+Disbatch::Web::Tasks - Disbatch::Web routes for deprecated task search and creation.
+
+=head1 DEPRECATION NOTICE
+
+This is deprecated as of Disbatch 4.2 and may be removed in Disbatch 4.4.
+
+=head1 NOTE
+
+These routes were formerly in L<Disbatch::Web>, but moved here. They are not loaded by default.
+
+=head1 SUBROUTINES
+
+=over 2
+
+=item init($disbatch, $args)
+
+Parameters: a C<Disbatch::Web> object (C<$args> is ignored).
+
+Sets package global C<$disbatch>.
+
+Returns nothing.
+
+=item deserialize_oid($object)
+
+Parameters: decoded JSON filter for the search (or a sub-value from it)
+
+If the object has the field C<$oid>, it is turned into a C<MongoDB::OID> object.
+
+Returns the modified object.
+
+=item search()
+
+Parameters: none (but parses request parameters, see C<POST /tasks/search> below)
+
+Performs task search.
+
+Returns result as JSON, setting HTTP status to C<400> on error.
+
+=back
+
+=head1 JSON ROUTES
+
+=over 2
+
 =item POST /tasks/search
 
 Parameters: C<< { "filter": filter, "options": options, "count": count, "terse": terse } >>
@@ -165,6 +213,12 @@ or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
 Sets HTTP status to C<400> on error.
 
 Note: replaces /queue-create-tasks-from-query-json
+
+=back
+
+=head1 SEE ALSO
+
+L<Disbatch::Web>
 
 =head1 AUTHORS
 

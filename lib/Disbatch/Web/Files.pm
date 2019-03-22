@@ -18,6 +18,34 @@ get qr{^/} => sub {
 
 1;
 
+=encoding utf8
+
+=head1 NAME
+
+Disbatch::Web::Files - Disbatch::Web routes for files
+
+=head1 NOTE
+
+These routes were formerly in L<Disbatch::Web>, but moved here. They are loaded automatically.
+
+=head1 BROWSER ROUTES
+
+=over 2
+
+=item GET /
+
+Returns the contents of "/index.html" – the queue browser page.
+
+=item GET qr{^/}
+
+Returns the contents of the request path.
+
+=back
+
+=head1 SEE ALSO
+
+L<Disbatch::Web>
+
 =head1 AUTHORS
 
 Ashley Willis <awillis@synacor.com>

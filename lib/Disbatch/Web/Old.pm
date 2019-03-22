@@ -307,6 +307,24 @@ post '/search-tasks-json' => sub {
 
 1;
 
+=encoding utf8
+
+=head1 NAME
+
+Disbatch::Web::Old - Disbatch::Web routes for deprecated v3 API
+
+=head1 DEPRECATION NOTICE
+
+This is deprecated as of Disbatch 4.0 and may be removed in Disbatch 4.2.
+
+=head1 NOTE
+
+These routes were formerly in L<Disbatch::Web>, but moved here. They are not loaded by default. They will not be documented.
+
+=head1 SEE ALSO
+
+L<Disbatch::Web>
+
 =head1 AUTHORS
 
 Ashley Willis <awillis@synacor.com>
