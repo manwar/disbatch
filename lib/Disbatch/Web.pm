@@ -680,7 +680,7 @@ parse_params, send_json_options, template
 
 Parameters: path to the Disbatch config file. Default is C</etc/disbatch/config.json>.
 
-Initializes the settings for the web server.
+Initializes the settings for the web server, including loading any custom routes via C<config.web_extensions> (see L<CUSTOM ROUTES> below).
 
 Returns nothing.
 
@@ -1001,13 +1001,23 @@ Returns as JSON the result of C<checks()>, documented above.
 
 =head1 CUSTOM ROUTES
 
-You can set an array of package names to C<web_extensions> in the config file to load any custom routes. They are parsed in order after the above routes.
+You can set an object of package names and arguments (can be C<null>) to C<web_extensions> in the config file to load any custom routes and call
+C<< $package->init($disbatch, $arguments) >> if available.
 Note that if a request which matches your custom route is also matched by an above route, your custom route will never be called.
-See L<Disbatch::Web::Files> for an example (that package is automatically loaded at the end, after any custom routes).
+If a custom route package needs to interface with Disbatch or have any arguments passed to it, it should have the following:
+
+    my $disbatch;
+
+    sub init {
+        (my $self, $disbatch, my $args) = @_;
+        # do whatever you may need to do with $args
+    }
+
+For examples see L<Disbatch::Web::Files> (which is automatically loaded at the end of C<init(), after any custom routes) and L<Disbatch::Web::Tasks> (not loaded by default).
 
 =head1 BROWSER ROUTES
 
-Note: this are loaded from L<Disbatch::Web::Files>.
+Note: these are loaded from L<Disbatch::Web::Files>.
 
 =over 2
 
