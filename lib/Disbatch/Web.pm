@@ -670,6 +670,10 @@ __END__
 
 Disbatch::Web - Disbatch Command Interface (JSON REST API and web browser interface to Disbatch).
 
+=head1 EXPORTED
+
+parse_params, send_json_options, template
+
 =head1 SUBROUTINES
 
 =over 2
@@ -681,6 +685,18 @@ Parameters: path to the Disbatch config file. Default is C</etc/disbatch/config.
 Initializes the settings for the web server.
 
 Returns nothing.
+
+=item template($template, $params)
+
+Parameters: template (C<.tt>) file name in the C<views/> directory, C<HASH> of parameters for the template.
+
+Creates a web page based on the passed data.
+
+Sets C<Content-Type> to C<text/html>.
+
+Returns the generated html document.
+
+NOTE: this sub is automatically exported, so any package using L<Disbatch::Web> can call it.
 
 =item parse_params
 
@@ -694,7 +710,21 @@ Parses request parameters in the following order:
 
 * from the request query otherwise
 
-Returns a C<HASH> of the parsed request parameters.
+It then puts any fields starting with C<.> into their own C<HASH> C<$options>.
+
+Returns the C<HASH> of the parsed request parameters, and if C<wantarray> also returns the C<HASH> of options.
+
+NOTE: this sub is automatically exported, so any package using L<Disbatch::Web> can call it.
+
+=item send_json_options
+
+Parameters: none
+
+Used to enable the following options when returning JSON: C<allow_blessed>, C<canonical>, and C<convert_blessed>.
+
+Returns a C<list> of key/value pairs of options to pass to C<send_json>.
+
+NOTE: this sub is automatically exported, so any package using L<Disbatch::Web> can call it.
 
 =item get_nodes
 
@@ -725,6 +755,8 @@ Returns: the repsonse object from a C<MongoDB::Collection#insert_many> request.
 =back
 
 =head1 JSON ROUTES
+
+NOTE: all JSON routes use C<send_json_options>, documented above.
 
 =over 2
 
