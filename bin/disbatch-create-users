@@ -108,6 +108,10 @@ Path to the JSON config file to set additional permissions for included roles. N
 
 If you have L<Disbatch::Web> load additional routes via C<config.web_extensions>, you may need to add permissions here.
 
+Format of the file is C<{ role_name: {collection_name: array_of_actions, ...}, ... }>.
+
+See file C<etc/disbatch/additional-permissions.json-example>.
+
 =item --create_root
 
 Will first create the root user in the C<admin> database. Optional.

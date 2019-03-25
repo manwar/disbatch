@@ -149,11 +149,19 @@ Parameters: C<< db => $db, plugin_perms => $plugin_perms, additional_perms => $a
 
 Dies if invalid parameters.
 
+=item add_additional_perms($name)
+
+Parameters: name of the role to add additional privileges to.
+
+Adds additional privileges to C<userroles> if C<additional_perms> was passed to C<new()>. See C<--additional_perms> in L<disbatch-create-users>.
+
+Returns nothing.
+
 =item create_roles_and_users
 
 Parameters: none.
 
-Creates the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin>.
+Creates the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin>, after calling C<add_additional_perms()>.
 
 Dies if the roles or users already exist, or on any other MongoDB error.
 
