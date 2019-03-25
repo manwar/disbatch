@@ -883,3 +883,42 @@ END {
         remove_tree "/tmp/$config->{database}";
     }
 }
+
+__END__
+
+=encoding utf8
+
+=head1 NAME
+
+t/002_full.t - test everything about Disbatch.
+
+=head1 USAGE
+
+Run the full test suite with the following:
+
+    dzil test
+
+To disable the V4.0 API tests, set C<V400_API> to C<0>:
+
+    V400_API=0 dzil test
+
+You can also disable MongoDB SSL and authentication via:
+
+    USE_SSL=0 USE_AUTH=0 dzil test
+
+You can test only one type of GFS tests by setting C<GFS_TESTS> to C<auto>, C<1>, or C<0>. Or set to any other value to not run those tests.
+
+    GFS_TESTS=none dzil test
+
+
+=head1 AUTHORS
+
+Ashley Willis <awillis@synacor.com>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2016, 2019 by Ashley Willis.
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
