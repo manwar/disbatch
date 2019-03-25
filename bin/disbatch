@@ -212,19 +212,6 @@ sub post_tasks {	# <queue> <json_array>					# JSON array of task params objects
     }
 }
 
-# from old Disbatch::Web post '/tasks/search'
-# POST /tasks/search
-# * 'ctime' and 'mtime' are like 1548272576.574
-# * 'stdout' and 'stderr' are "[terse mode]"
-# * curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:3002/tasks/search
-# GET /tasks
-# * 'ctime' and 'mtime' are like 2019-01-23T19:42:56
-# * 'stdout' and 'stderr' are actual content
-# * curl 'http://localhost:3002/tasks?.pretty=1&status=1&.terse=1&.epoch=1'
-# * curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:3002/tasks
-
-# /home/awillis/git/disbatch/bin/disbatch --url http://localhost:3002 search '{"status":1}'
-# NOTE: options passed may include: .count .fields .limit .skip .terse .full .epoch .pretty
 sub get_tasks {		# <filter>						# {filter: filter, options: options, count: count, terse: terse}
     my ($params) = @ARGV;
 
@@ -454,9 +441,8 @@ Error examples:
   $ disbatch --collection DNE create-tasks 579a7059eb6af87dcc6ef4e2 '{"filter":{"migration":"foo"},"params":{"user":"document.username"}}'
   Error posting http://localhost:8080/tasks/test/DNE (400 Bad Request): {"MongoDB::InsertManyResult":{"acknowledged":1,"inserted":[],"write_concern_errors":[],"write_errors":[]},"error":"Unknown error"}
 
-=item tasks [<json_filter>] [[--limit <limit>] [--skip <skip>] [--noterse] [--epoch] [--pretty] | [--count]]
 
-FIXME: add --limit, --skip, and --epoch options, and maybe add --full and --fields options
+=item tasks [<json_filter>] [[--limit <limit>] [--skip <skip>] [--fields] [--noterse] [--epoch] [--pretty] | [--count]]
 
 Returns a JSON array of task documents matching the JSON query given. Note that blessed values may be munged to be proper JSON. Limit of C<20> documents returned by default.
 
@@ -465,10 +451,12 @@ Returns a JSON array of task documents matching the JSON query given. Note that 
 
 The option C<--limit> can be used to change the maxinum number of documents returned.
 The option C<--skip> can be used to skip that number of documents in returned results.
+The option C<--fields> can be used to only return the specified fields of tasks.
 
 The option C<--noterse> can be used to disable terse mode (on by default).
 If enabled, the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
-If disabled, the full content of C<stdout> and C<stderr> will be returned.
+If disabled, the actual values of C<stdout> and C<stderr> will be returned, which may be a L<MongoDB::OID> object.
+The option C<--full> will replace any L<MongoDB::OID> values of C<stdout> and C<stderr> with their full content.
 
 The option C<--epoch> will return C<ctime> and C<mtime> as FIXME instead of FIXME.
 
@@ -486,7 +474,6 @@ Error examples:
   $ disbatch tasks '{"status":-2}'
   Error getting http://localhost:3002/tasks (400 Bad Request): {"error":"non-indexed params given","indexes":[["id"],["node","status","queue","id"],["queue","status"]],"invalid_params":["status"],"path":"/tasks","title":"Disbatch Tasks Query"}
 
-=cut
 
 =item search [<json_filter>] [--options <options>] [--count | --terse]
 
