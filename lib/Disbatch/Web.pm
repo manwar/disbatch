@@ -8,7 +8,6 @@ use Clone qw/clone/;
 use Cpanel::JSON::XS;
 use Data::Dumper;
 use Disbatch;
-use Disbatch::Web::Query;
 use Exporter qw/ import /;
 use File::Slurp;
 use Limper::SendFile;	# needed for public()
@@ -16,6 +15,7 @@ use Limper::SendJSON;
 use Limper;
 use MongoDB::OID 1.0.4;
 use Safe::Isa;
+use Scalar::Util qw/ looks_like_number /;
 use Template;
 use Time::Moment;
 use Try::Tiny::Retry;
@@ -24,7 +24,6 @@ use URL::Encode qw/url_params_mixed/;
 our @EXPORT = qw/ parse_params send_json_options template /;
 
 my $oid_keys = [ qw/ queue / ];	# NOTE: in addition to _id
-my $util = Disbatch::Web::Query->new();	# query()
 
 sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1 }
 
@@ -474,7 +473,7 @@ get '/tasks' => sub {
     $params = undef if defined $params and $params eq '';	# FIXME: maybe move to parse_params() above
     my $want_json = want_json;
 
-    my $indexes = $util->get_indexes($disbatch->tasks);
+    my $indexes = get_indexes($disbatch->tasks);
     my $schema = {
             verb => 'GET',
             limit => 100,
@@ -487,7 +486,7 @@ get '/tasks' => sub {
         return template 'query.tt', $result;
     }
 
-    my $result = $util->query($params, $options, $schema->{title}, $oid_keys, $disbatch->tasks, request->{path}, $want_json, $indexes);
+    my $result = query($params, $options, $schema->{title}, $oid_keys, $disbatch->tasks, request->{path}, $want_json, $indexes);
     if ($want_json) {
         status 400 if ref $result ne 'ARRAY' and exists $result->{error};
         _munge_tasks($result, $options);
@@ -516,7 +515,7 @@ Or, via a web browser (based on C<Accept> header value), returns the task matchi
 get qr'^/tasks/(?<id>[0-9a-f]{24})$' => sub {
     my $title = "Disbatch Single Task Query";
     my $want_json = want_json;
-    my $result = $util->query({id => $+{id}}, {'.limit' => 1}, $title, $oid_keys, $disbatch->tasks, request->{path}, $want_json, [['id']]);
+    my $result = query({id => $+{id}}, {'.limit' => 1}, $title, $oid_keys, $disbatch->tasks, request->{path}, $want_json, [['id']]);
     if ($want_json) {
         if (!keys %$result) {
             status 404;
@@ -657,6 +656,124 @@ sub checks {
 get '/monitoring' => sub {
     send_json checks(), send_json_options;
 };
+
+sub get_indexes {
+    my ($coll) = @_;
+    my @indexes = $coll->indexes->list->all;
+    my %names = map { $_->{name} =~ s/_-1(_|$)/_1$1/; $_->{name} => $_ } @indexes;
+    my @parsed;
+    for my $name (sort keys %names) {
+        next if grep { my $qm = quotemeta $name; $_ =~ /^$qm.+/ } keys %names;	# $name is a subset of another index, so ignore it
+        my $count = keys %{$names{$name}{key}};
+        $names{$name}{name} =~ s/_1$//;
+        my @array = split /_1_/, $names{$name}{name}, $count;
+        die "Couldn't parse index: ", Cpanel::JSON::XS->new->convert_blessed->allow_blessed->pretty->encode($names{$name}) unless $count == @array;
+        $array[0] = '_id' if $array[0] eq '_id_';	# damn mongo for it ending in '_'
+        map { $array[$_] = 'id' if $array[$_] eq '_id' } 0..@array-1;	# damn T::T
+        push @parsed, \@array;
+    }
+    \@parsed;
+}
+
+sub invalid_params {
+    my ($params, $indexes) = @_;
+    my @invalid;
+    param: for my $param (keys %$params) {
+        # 2. if param is part of an index, and every part of the index to its left is a param, it's good
+        for my $compound (@$indexes) {
+            if (grep { $param eq $_ } @$compound) {
+                # we know at least this param is part of this index
+                my $good = 1;
+                for my $i (@$compound) {
+                    $good = 0 unless grep {$i eq $_ } keys %$params;	# part of the prefix is not indexed
+                    last if !$good or $i eq $param;
+                }
+                next param if $good;
+            }
+        }
+        # 3. otherwise, it's bad
+        push @invalid, $param;
+    }
+    @invalid;
+}
+
+sub params_to_query {
+    my ($params, $oid_keys) = @_;
+    # build a query:
+    my @and = ();
+    while (my ($k, $v) = each %$params) {
+        next if $v eq '';
+        if ($k eq 'id' or grep { $k eq $_ } @$oid_keys) {
+            # TT doesn't like keys starting with an underscore:
+            $k = '_id' if $k eq 'id';
+            # change $v into an ObjectId / ARRAY of ObectIds:
+            push @and, ref($v) eq 'ARRAY'
+                ? { '$or' => [ map { MongoDB::OID->new(value => $_) } @$v ] }
+                : { $k => MongoDB::OID->new(value => $v) };
+        } elsif (looks_like_number(ref $v eq 'ARRAY' ? $v->[0] : $v)) {	# NOTE: this only checks the first element in @$v
+            push @and, ref($v) eq 'ARRAY'
+                ? { '$or' => [ map { { $k => 0 + $_ } } @$v ] }
+                : { $k => 0 + $v };
+        } else {
+            push @and, ref($v) eq 'ARRAY'
+                ? { '$or' => [ map { { $k => $_ } } @$v ] }
+                : { $k => $v };
+        }
+    }
+    @and ? { '$and' => \@and } : {};
+}
+
+# get_indexes() invalid_params() params_to_query()
+# FIXME: i hate this code
+sub query {
+    my ($params, $options, $title, $oid_keys, $collection, $path, $raw, $indexes) = @_;
+    $options //= {};	# .count .limit .skip .fields
+    $title //= '';
+    $indexes //= get_indexes($collection);
+
+    my $fields = $options->{'.fields'} || {};
+    my $limit = $options->{'.limit'} || 0;
+    my $skip = $options->{'.skip'} || 0;
+
+    # FIXME: maybe move this $fields modification to parse_params()
+    $fields = Cpanel::JSON::XS->new->utf8->decode($fields) unless ref $fields;	# NOTE: i don't like embedding json in url params	# FIXME: catch and return error
+    $fields = { map { $_ => 1 } @$fields } if ref $fields eq 'ARRAY';
+
+    # can only query indexed fields
+    my @invalid_params = invalid_params($params, $indexes);
+    return { title => $title, path => $path, error => 'non-indexed params given', invalid_params => \@invalid_params, indexes => $indexes } if @invalid_params;
+
+    my $query = params_to_query($params, $oid_keys);
+
+    return { count => $collection->count($query) } if $options->{'.count'};
+
+    # we don't want to return the entire collection
+    return { title => $title, path => $path, error => 'refusing to return everything - include one or more indexed search restrictions', indexes => $indexes } unless keys %$query or $limit > 0;
+
+    my @documents = $collection->find($query)->fields($fields)->limit($limit)->skip($skip)->all;
+
+    if ($raw // 0) {
+        # FIXME: return [] if no @documents unless $limit == 1, then maybe return undef
+        return {} unless @documents;
+        return ($limit == 1 ? $documents[0] : \@documents);
+    }
+
+    # need allow_blessed for some reason because analysed value is a boolean. convert_blessed messes this up, but is needed for OIDs.
+    my $documents = Cpanel::JSON::XS->new->convert_blessed->allow_blessed->pretty->encode($limit == 1 ? $documents[0] : \@documents) if @documents;
+    my $result = {
+        result  => $documents,
+        title   => "$title Results",
+        count   => scalar @documents,
+        limit   => $limit,
+        skip    => $skip,
+        params_str  => join('&', map { "$_=$params->{$_}" } keys %$params),	# FIXME: maybe we need $options in here too
+        mypath => $path,
+    };
+
+    $result->{json} = $documents[0] if $limit == 1;
+
+    return $result;
+}
 
 1;
 
@@ -799,6 +916,61 @@ If C<config.monitoring>, calls C<check_disbatch()> and C<check_queuebalance()>.
 
 Returns C<< { disbatch => check_disbatch() , queuebalance => check_queuebalance() } >> if C<config.monitoring> is true, otherwise
 C<< { disbatch => { status => 'OK', message => 'monitoring disabled' }, queuebalance => $checks->{queuebalance} = { status => 'OK', message => 'monitoring disabled' } } >>.
+
+=item get_indexes($coll)
+
+Parameters: C<MongoDB::Collection>.
+
+Returns an C<ARRAY> of C<ARRAY>s of current indexes for the given collection.
+
+Note: C<_id> is turned into C<id> because of L<Template>.
+
+=item invalid_params($params, $indexes)
+
+Parameters: MongoDB query params C<HASH>, current existsing collection indexes C<HASH>
+
+Returns a list of all params passed which do not match the given indexes. If the list is empty, the params are good.
+
+Note: only looks at keys in C<$params>, not their values.
+
+=item params_to_query($params, $oid_keys)
+
+Parameters: C<HASH> form parameters for a MongoDB query, C<ARRAY> of index keys whose values are always ObjectIds, excluding C<_id>.
+
+Turns fields from an HTTP request into a query suitable for L<MongoDB::Collection>.
+
+=over 2
+
+Skips key/value pairs where the value is the empty string.
+
+If a key is C<id> or is in C<$oid_keys>, turns the value(s) which should be hex strings into L<MongoDB::OID> objects.
+
+Otherwise if a value (or first element of an C<ARRAY> value) looks like a number, ensures the value (or elements) is a Perl number.
+
+Any values which are C<ARRAY>s are turned into queries joined by C<$or>.
+
+If more than one key/value pair, they are joined into an C<$and> query.
+
+=back
+
+Returns a query to pass a L<MongoDB::Collection> object.
+
+=item query($params, $options, $title, $oid_keys, $collection, $path, $raw, $indexes)
+
+Performs a MongoDB query (C<count> or C<find>).
+
+Parameters: HTTP params (C<HASH>), options (C<HASH>), title (string), OID keys (C<ARRAY>), L<MongoDB::Collection> object,
+form action path (string), return raw result (boolean), indexes (C<ARRAY> of arrays).
+
+Form action path should be from C<< request->{path} >>.
+
+Options can be C<.count>, C<.fields> to return, C<.limit>, and C<.skip>.
+
+Raw and indexes key are optional -- raw defaults to 0, and indexes are queried if C<undef>.
+
+Returns the result of the query as a C<HASH> or C<ARRAY>, or an error C<HASH>.
+
+NOTE: I hate this code. Read it to determine the formats it might return.
 
 =back
 
@@ -1055,7 +1227,7 @@ Matt Busigin
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2016, 2019 by Ashley Willis.
+This software is Copyright (c) 2015, 2016, 2019 by Ashley Willis.
 
 This is free software, licensed under:
 
