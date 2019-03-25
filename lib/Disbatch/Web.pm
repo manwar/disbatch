@@ -429,24 +429,6 @@ post '/tasks' => sub {
     post_tasks();
 };
 
-=item GET /tasks
-
-Parameters: FIXME (was: valid options according to the tasks->query schema.)
-
-Returns FIXME (was: valid fields to search for tasks if invalid or no parameters), or the results of the search, in JSON.
-
-FIXME: in query.tt at least toggleGroup() should run at $(document).ready() when returning a form because of invalid params, instead of only showing the limit (bug is there, not at all here)
-
-=cut
-
-# NOTE: handles .terse, .full, and .epoch for GET /tasks
-# * 'ctime' and 'mtime' are like 2019-01-23T19:42:56, unless .epoch, which will make them hires epoch times (float)
-# * 'stdout' and 'stderr' are actual content, unless .terse for "[terse mode]" or .full to replace with gfs docs
-# * the following are equivalent:
-#   $ curl 'http://localhost:3002/tasks?.pretty=1&status=1&.terse=1&.epoch=1'
-#   $ curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:8080/tasks
-# * and get you a result like default POST /tasks/search:
-#   $ curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:8080/tasks/search
 # NOTE: i hate this, but it should maybe be here for backcompat
 sub _munge_tasks {
     my ($tasks, $options) = @_;
@@ -467,6 +449,7 @@ sub _munge_tasks {
     }
 }
 
+# FIXME: in query.tt at least toggleGroup() should run at $(document).ready() when returning a form because of invalid params, instead of only showing the limit (bug is there, not at all here)
 get '/tasks' => sub {
     undef $disbatch->{mongo};	# FIXME: why is this added?
     my ($params, $options) = parse_params;	# NOTE: $options may contain: .limit .skip .count .pretty .terse .epoch .full
@@ -501,16 +484,6 @@ get '/tasks' => sub {
         template 'query.tt', $result;
     }
 };
-
-
-=item GET /tasks/:id
-
-Parameters: Task OID in URL
-
-Returns the task matching OID as JSON, or C<{ "error": "no task with id :id" }> and status C<404> if OID not found.
-Or, via a web browser (based on C<Accept> header value), returns the task matching OID with some formatting, or C<No tasks found matching query> if OID not found.
-
-=cut
 
 get qr'^/tasks/(?<id>[0-9a-f]{24})$' => sub {
     my $title = "Disbatch Single Task Query";
@@ -883,6 +856,27 @@ Creates one queued task document for the given queue _id per C<$tasks> entry. Ea
 
 Returns: the repsonse object from a C<MongoDB::Collection#insert_many> request.
 
+=item post_tasks($legacy_params)
+
+Parameters: legacy params (optional, used by routes in Disbatch::Web::Tasks), also parses request parameters
+
+Handles creating tasks to insert, and then creates them via C<create_tasks()>. See C<POST /tasks> below for usage.
+
+Returns the resonse of C<create_tasks()> as JSON with the key the ref type of the response and the value the response turned into a C<HASH>,
+or on error sets HTTP status to C<400> and returns JSON of C<{"error":message}>.
+
+=item _munge_tasks($tasks, $options)
+
+Parameters: C<ARRAY> of task documents, C<HASH> of param options
+
+Options handled are C<.terse>, C<.full>, and C<.epoch>, all booleans.
+
+If C<.terse>, C<stdout> and C<stderr> values of each document will be C<[terse mode]> if defined and not a L<MongoDB::OID> object.
+Else if C<.full>, C<stdout> and C<stderr> values of each document will be actual content instead of L<MongoDB::OID> objects.
+If C<.epoch>, C<ctime> and C<mtime> will be turned into C<hires_epoch> (ex: C<1548272576.574>) insteaad of stringified (ex: C<2019-01-23T19:42:56>) if they are C<DateTime> objects.
+
+Returns nothing, modifies passed tasks.
+
 =item get_balance
 
 Parameters: none
@@ -1113,40 +1107,49 @@ Note: replaces /delete-queue-json
 
 =item GET /tasks
 
-WARNING: everything in this section is for the old  C<POST /tasks/search>!
+Parameters: anything indexed on the C<tasks> collection, as well as any dot options.
 
-Parameters: C<< { "filter": filter, "options": options, "count": count, "terse": terse } >>
+Options can be C<.count>, C<.fields> to return, query C<.limit> and C<.skip>, C<.terse> or C<.full> output, dates as C<.epoch>, and C<.pretty> print JSON result.
 
-All parameters are optional.
+Performs a search of tasks, returning either JSON or a web page.
 
-C<filter> is a filter expression (query) object.
+If C<want_json()> (based on the C<Accept> header), returns a JSON array (which may be pretty-printed if specified in the parameters) of task documents,
+or on error an object with an C<error> field (and possibly other fields).
 
-C<options> is an object of desired options to L<MongoDB::Collection#find>.
-
-If not set, C<options.limit> will be C<100>. This will fail if you try to set it above C<100>.
-
-C<count> is a boolean. Instead of an array of task documents, the count of task documents matching the query will be returned.
-
-C<terse> is a boolean. If C<true>, the the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
-If C<false>, the full content of C<stdout> and C<stderr> will be returned. Default is C<true>.
-
-Returns: Array of task Objects or C<< { "count": $count } >> on success; C<< { "error": "filter and options must be name/value objects" } >>,
-C<< { "error": "limit cannot exceed 100" } >>, or C<< { "error": "Bad OID passed: $error" } >> on input error;
-or C<< { "error": "$error" } >> on count or search error.
+Otherwise, if no parameters returns a web form to perform a search of indexed fields. If parameters, returns a web page of results or error.
 
 Sets HTTP status to C<400> on error.
 
-Note: replaces C<POST /tasks/search>
+Note: new in 4.2, replaces C<POST /tasks/search>
 
-=item POST /tasks?queue=:queue[&collection=:collection]
+=item GET /tasks/:id
 
-URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not. C<:collection> is a MongoDB collection name.
+Parameters: Task OID in URL
 
-Parameters: an array of task params objects if not passing a C<collection> in the URL, or C<< { "filter": filter, "params": params } >>
+Returns the task matching OID as JSON, or C<{ "error": "no task with id :id" }> and status C<404> if OID not found.
+Or, via a web browser (based on C<Accept> header value), returns the task matching OID with some formatting, or C<No tasks found matching query> if OID not found.
+
+=cut
+
+=item POST /tasks
+
+Parameters: C<{ "queue": queue, "params": [single_task_params, another_task_params, ...] }> or C< { "queue": queue, "params": generic_task_params, "collection": collection, "filter": filter }>.
+
+C<queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not.
+
+C<collection> is a MongoDB collection name.
 
 C<filter> is a filter expression (query) object for the C<:collection> collection.
 
-C<params> is an object of task params. To insert a document value from a query into the params, prefix the desired key name with C<document.> as a value.
+C<params> depends on if passing a collection and filter or not.
+
+=over 2
+
+If not, C<params> is an array of objects, each of which will be inserted as-is as the C<params> value in created tasks.
+
+Otherwise, C<params> is an object of generic task params. To insert a document value from a query into the params, prefix the desired key name with C<document.> as a value.
+
+=back
 
 Returns: C<< { ref $res: Object } >> on success; C<< { "error": "params must be a JSON array of task params" } >>, C<< { "error": "filter and params required and must be name/value objects" } >>
 or C<< { "error": "queue not found" } >> on input error; C<< { "error": "Could not iterate on collection $collection: $error" } >> on query error, or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
