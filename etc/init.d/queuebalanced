@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# queuebalanced init file for starting up a DEN daemon
+# queuebalanced init file for starting up the Disbatch Queue Balance daemon
 #
 # chkconfig:   - 20 80
 # description: Starts and stops the Disbatch Queue Balance daemon

@@ -20,7 +20,17 @@ __END__
 
 =head1 NAME
 
-QueueBalance
+queuebalanced
+
+=head1 SYNOPSIS
+
+    ./bin/queuebalanced [--config <config_file>]
+
+=head1 DESCRIPTION
+
+Runs L<Disbatch::QueueBalance>, sleeping C<30> seconds after every call to C<update()>.
+
+The C<config_file> defaults to C</etc/disbatch/config.json>.
 
 =head1 AUTHORS
 

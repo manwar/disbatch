@@ -227,15 +227,31 @@ Disbatch::QueueBalance
 
 =over 2
 
-=item new
+=item new($config_file)
+
+Parameters: path to Disbatch config file
+
+Sets up QueueBalance. Dies if QueueBalance is not configured or not enabled.
+
+=item status($status, $message)
+
+Parameters: status string (should be C<OK>, C<WARNING>, or C<CRITICAL>), message for status
+
+Returns C<update_one> result, but is ignored.
 
 =item update
 
+Parameters: none
+
 Updates maxthreads for all queues, for all clients.
 
-=item max_tasks
+Returns nothing meaningful. Sets status to C<CRITICAL> and dies if the C<balance> collection is misconfigured.
 
-Parameters: C<HASH> where keys are of form C<D H M> and values are integers.
+=item max_tasks($max_threads_entries)
+
+Parameters: C<HASH> where keys are of form C<D H:M> and values are integers.
+
+Determines the max number of threads allowed for the current day and time.
 
 Returns: integer for current max_threads allowed
 
