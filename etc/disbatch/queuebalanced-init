@@ -4,6 +4,8 @@ use 5.12.0;
 use warnings;
 use Daemon::Control;
 
+
+
 Daemon::Control->new({
     name         => 'queuebalanced',
     program      => '/usr/bin/queuebalanced',
@@ -13,7 +15,7 @@ Daemon::Control->new({
     lsb_start    => '$syslog $remote_fs',
     lsb_stop     => '$syslog',
     lsb_sdesc    => 'queuebalanced',
-    lsb_desc     => 'Daemon for Disbatch Queue Balance',
+    lsb_desc     => 'Disbatch Queue Balance daemon',
 
     pid_file     => '/var/run/queuebalanced.pid',
     stdout_file  => '/var/log/queuebalanced.log',
@@ -27,11 +29,3 @@ Daemon::Control->new({
     fork         => 2,
 
 })->run;
-
-__END__
-
-=head1 NAME
-
-queuebalanced
-
-=cut
