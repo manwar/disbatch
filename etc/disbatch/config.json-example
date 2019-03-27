@@ -40,7 +40,7 @@
 
     # Everthing below here is optional, and is set up for development, not production
     "task_runner": "./bin/task_runner",			# defaults to "/usr/bin/task_runner"
-    #"gfs": false,					# defaults to 'auto'
+    #"gfs": false,					# defaults to "auto"
     "web_root": "etc/disbatch/htdocs/",			# defaults to "/etc/disbatch/htdocs/"
     "views_dir": "etc/disbatch/views/",			# defaults to "/etc/disbatch/views/"
 
