@@ -42,6 +42,7 @@
     "task_runner": "./bin/task_runner",			# defaults to "/usr/bin/task_runner"
     #"gfs": false,					# defaults to 'auto'
     "web_root": "etc/disbatch/htdocs/",			# defaults to "/etc/disbatch/htdocs/"
+    "views_dir": "etc/disbatch/views/",			# defaults to "/etc/disbatch/views/"
 
     # defaults to "DEBUG" for level, and "/var/log/disbatchd.log" for the filename
     "log4perl": {

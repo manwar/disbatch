@@ -48,3 +48,5 @@ For an example using `init()`, see `Disbatch::Web::Tasks` (not loaded by default
 For a simple example not using `init()`, see `Disbatch::Web::Files` (which is automatically loaded at the end of `init()`, after any custom routes).
 
 To see how `template` is used, see `Disbatch::Web` itself. Templates all get inserted as the `[% content %]` part of `views/layouts/main.tt`.
+
+The views directory defaults to `/etc/disbatch/views/`, but can be set via `config.views_dir`.

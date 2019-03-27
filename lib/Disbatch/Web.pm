@@ -27,8 +27,7 @@ my $oid_keys = [ qw/ queue / ];	# NOTE: in addition to _id
 
 sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1 }
 
-# the following options should be compatible with previous Dancer usage:
-my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => 'views', START_TAG => '\[%', END_TAG => '%\]', WRAPPER => 'layouts/main.tt');
+my $tt;
 
 # this should be compatible with Dancer's template(), except we do not support the optional settings (third value), and it was unused by RemoteControl
 sub template {
@@ -61,6 +60,8 @@ sub init {
         }
     }
     require Disbatch::Web::Files;	# this has a catch-all to send any matching file in the public root directory, so must be loaded last.
+    # the following options should be compatible with previous Dancer usage:
+    $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => $disbatch->{config}{views_dir} // '/etc/disbatch/views/', START_TAG => '\[%', END_TAG => '%\]', WRAPPER => 'layouts/main.tt');
 }
 
 sub parse_params {
@@ -777,7 +778,7 @@ Returns nothing.
 
 =item template($template, $params)
 
-Parameters: template (C<.tt>) file name in the C<views/> directory, C<HASH> of parameters for the template.
+Parameters: template (C<.tt>) file name in the C<config.views_dir> directory, C<HASH> of parameters for the template.
 
 Creates a web page based on the passed data.
 

@@ -72,6 +72,7 @@ my $config = {
         #"Disbatch::Web::V3" => undef,		# deprecated v3 routes: *-json, not tested
     },
     web_root => 'etc/disbatch/htdocs/',
+    views_dir => 'etc/disbatch/views/',
     task_runner => './bin/task_runner',
     testing => 1,	# for task_runner to use lib 'lib'
     gfs => 'auto',	# default
