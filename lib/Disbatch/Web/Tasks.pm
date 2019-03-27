@@ -14,7 +14,7 @@ use Try::Tiny;
 my $disbatch;
 
 sub init {
-    (my $self, $disbatch, my $args) = @_;
+    ($disbatch, my $args) = @_;
 }
 
 sub deserialize_oid {

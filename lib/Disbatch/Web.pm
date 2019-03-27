@@ -54,7 +54,8 @@ sub init {
             $disbatch->logger->error("Illegal plugin value: $plugin, ignored");
         } elsif (eval "require $plugin") {
             $disbatch->logger->info("$plugin found and loaded");
-            $plugin->init($disbatch, $disbatch->{config}{web_extensions}{$plugin}) if $plugin->can('init');
+            no strict 'refs';
+            ${"${plugin}::"}{init}->($disbatch, $disbatch->{config}{web_extensions}{$plugin}) if $plugin->can('init');
         } else {
             $disbatch->logger->warn("Could not load $plugin, ignored");
         }
@@ -1193,14 +1194,14 @@ Returns as JSON the result of C<checks()>, documented above.
 =head1 CUSTOM ROUTES
 
 You can set an object of package names and arguments (can be C<null>) to C<web_extensions> in the config file to load any custom routes and call
-C<< $package->init($disbatch, $arguments) >> if available.
+C<< init($disbatch, $arguments) >> if available.
 Note that if a request which matches your custom route is also matched by an above route, your custom route will never be called.
 If a custom route package needs to interface with Disbatch or have any arguments passed to it, it should have the following:
 
     my $disbatch;
 
     sub init {
-        (my $self, $disbatch, my $args) = @_;
+        ($disbatch, my $args) = @_;
         # do whatever you may need to do with $args
     }
 
