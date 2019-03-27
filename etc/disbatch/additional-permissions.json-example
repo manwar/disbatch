@@ -8,5 +8,11 @@
 {
     "disbatch_web": {
         "tasks": [ "update", "remove" ],
+        # NOTE: for reference these are the default permissions for disbatch_web as of 4.2 (see lib/Disbatch/Roles.pm)
+        #"": [ "find", "listIndexes" ],
+        #"balance": [ "insert", "update" ],
+        #"nodes": [ "update" ],
+        #"queues": [ "insert", "update", "remove" ],
+        #"tasks": [ "insert" ],
     },
 }
