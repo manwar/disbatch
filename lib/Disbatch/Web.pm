@@ -72,6 +72,16 @@ sub parse_params {
     wantarray ? ($params, $options) : $params;
 }
 
+sub parse_accept {
+    +{ map { @_ = split(/;q=/, $_); $_[0] => $_[1] // 1 } split /,\s*/, request->{headers}{accept} // '' };
+}
+
+sub want_json {
+    my $accept = parse_accept;
+    # prefer 'text/html over 'application/json' if equal, but default to 'application/json'
+    ($accept->{'text/html'} // 0) >= ($accept->{'application/json'} // 1) ? 0 : 1;
+}
+
 ################
 #### NEW API ###
 ################
