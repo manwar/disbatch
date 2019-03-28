@@ -7,6 +7,7 @@ use warnings;
 use Cpanel::JSON::XS;
 use Data::Dumper;
 use Disbatch;
+use Exporter qw/ import /;
 use File::Slurp;
 use Limper::SendFile;
 use Limper::SendJSON;
@@ -19,7 +20,7 @@ use Time::Moment;
 use Try::Tiny::Retry;
 use URL::Encode qw/url_params_mixed/;
 
-my $json = Cpanel::JSON::XS->new->utf8;
+our @EXPORT = qw/ parse_params send_json_options template /;
 
 sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1, pretty => 0 }		# from remotecontrol/config.yml
 
