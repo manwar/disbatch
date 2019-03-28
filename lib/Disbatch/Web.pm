@@ -59,13 +59,17 @@ sub init {
 }
 
 sub parse_params {
+    my $params = {};
     if ((request->{headers}{'content-type'} // '') eq 'application/x-www-form-urlencoded') {
-        url_params_mixed(request->{body}, 1);
+        $params = url_params_mixed(request->{body}, 1);
     } elsif ((request->{headers}{'content-type'} // '') eq 'application/json') {
-        try { $json->decode(request->{body}) } catch { $_ };
+        $params = try { Cpanel::JSON::XS->new->utf8->decode(request->{body}) } catch { $_ };
     } elsif (request->{query}) {
-        url_params_mixed(request->{query}, 1);
+        $params = url_params_mixed(request->{query}, 1);
     }
+    my $options = { map { $_ => delete $params->{$_} } grep { /^\./ } keys %$params } if ref $params eq 'HASH';	# put fields starting with '.' into their own HASH
+    # NOTE: $options may contain: .limit .skip .count .pretty .terse .epoch
+    wantarray ? ($params, $options) : $params;
 }
 
 ################
