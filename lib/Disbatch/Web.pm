@@ -14,11 +14,28 @@ use Limper;
 use Log::Log4perl;
 use MongoDB::OID 1.0.4;
 use Safe::Isa;
+use Template;
 use Time::Moment;
 use Try::Tiny::Retry;
 use URL::Encode qw/url_params_mixed/;
 
 my $json = Cpanel::JSON::XS->new->utf8;
+
+# the following options should be compatible with previous Dancer usage:
+my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => 'views', START_TAG => '\[%', END_TAG => '%\]', WRAPPER => 'layouts/main.tt');
+
+# this should be compatible with Dancer's template(), except we do not support the optional settings (third value), and it was unused by RemoteControl
+sub template {
+    my ($template, $params) = @_;
+    my $output = '';
+    $params->{perl_version} = $];
+    $params->{limper_version} = $Limper::VERSION;
+    $params->{request} = request;
+    $tt->process($template, $params, \$output) || die $tt->error();
+    headers 'Content-Type' => 'text/html';
+    $output;
+}
+
 my $disbatch;
 
 sub init {
