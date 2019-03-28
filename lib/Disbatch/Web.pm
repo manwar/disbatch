@@ -21,6 +21,8 @@ use URL::Encode qw/url_params_mixed/;
 
 my $json = Cpanel::JSON::XS->new->utf8;
 
+sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1, pretty => 0 }		# from remotecontrol/config.yml
+
 # the following options should be compatible with previous Dancer usage:
 my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => 'views', START_TAG => '\[%', END_TAG => '%\]', WRAPPER => 'layouts/main.tt');
 
@@ -91,9 +93,9 @@ get '/nodes' => sub {
     my $nodes = try { get_nodes } catch { status 400; "Could not get current nodes: $_" };
     if ((status() // 200) == 400) {
         Limper::warning $nodes;
-        return send_json { error => $nodes };
+        return send_json { error => $nodes }, send_json_options;
     }
-    send_json $nodes, convert_blessed => 1;
+    send_json $nodes, send_json_options;
 };
 
 get qr'^/nodes/(?<node>.+)' => sub {
@@ -102,9 +104,9 @@ get qr'^/nodes/(?<node>.+)' => sub {
     my $node = try { get_nodes($filter) } catch { status 400; "Could not get node $+{node}: $_" };
     if ((status() // 200) == 400) {
         Limper::warning $node;
-        return send_json { error => $node };
+        return send_json { error => $node }, send_json_options;
     }
-    send_json $node->[0], convert_blessed => 1;
+    send_json $node->[0], send_json_options;
 };
 
 #  postJSON('/nodes/' + row.rowId , { maxthreads: newValue}, loadQueues);
@@ -114,19 +116,19 @@ post qr'^/nodes/(?<node>.+)' => sub {
 
     unless (keys %$params) {
         status 400;
-        return send_json {error => 'No params'};
+        return send_json {error => 'No params'}, send_json_options;
     }
     my @valid_params = qw/maxthreads/;
     for my $param (keys %$params) {
         unless (grep $_ eq $param, @valid_params) {
             status 400;
-            return send_json { error => 'Invalid param', param => $param};
+            return send_json { error => 'Invalid param', param => $param}, send_json_options;
         }
     }
     my $node = $+{node};	# regex on next line clears $+
     if (exists $params->{maxthreads} and defined $params->{maxthreads} and $params->{maxthreads} !~ /^\d+$/) {
         status 400;
-        return send_json {error => 'maxthreads must be a non-negative integer or null'};
+        return send_json {error => 'maxthreads must be a non-negative integer or null'}, send_json_options;
     }
     my $filter = try { {_id => MongoDB::OID->new(value => $node)} } catch { {node => $node} };
     my $res = try {
@@ -146,12 +148,12 @@ post qr'^/nodes/(?<node>.+)' => sub {
             $reponse->{error} = "$res";
         }
     }
-    send_json $reponse;
+    send_json $reponse, send_json_options;
 };
 
 # This is needed at least to create queues in the web interface.
 get '/plugins' => sub {
-    send_json $disbatch->{config}{plugins};
+    send_json $disbatch->{config}{plugins}, send_json_options;
 };
 
 get '/queues' => sub {
@@ -159,9 +161,9 @@ get '/queues' => sub {
     my $queues = try { $disbatch->scheduler_report } catch { status 400; "Could not get current queues: $_" };
     if ((status() // 200) == 400) {
         Limper::warning $queues;
-        return send_json { error => $queues };
+        return send_json { error => $queues }, send_json_options;
     }
-    send_json $queues;
+    send_json $queues, send_json_options;
 };
 
 get qr'^/queues/(?<queue>.+)$' => sub {
@@ -171,10 +173,10 @@ get qr'^/queues/(?<queue>.+)$' => sub {
     my $queues = try { $disbatch->scheduler_report } catch { status 400; "Could not get current queues: $_" };
     if ((status() // 200) == 400) {
         Limper::warning $queues;
-        return send_json { error => $queues };
+        return send_json { error => $queues }, send_json_options;
     }
     my ($queue) = grep { $_->{$key} eq $+{queue} } @$queues;
-    send_json $queue;
+    send_json $queue, send_json_options;
 };
 
 sub map_plugins {
@@ -187,18 +189,18 @@ post '/queues' => sub {
     my $params = parse_params;
     unless (($params->{name} // '') and ($params->{plugin} // '')) {
         status 400;
-        return send_json { error => 'name and plugin required' };
+        return send_json { error => 'name and plugin required' }, send_json_options;
     }
     my @valid_params = qw/name plugin/;
     for my $param (keys %$params) {
         unless (grep $_ eq $param, @valid_params) {
             status 400;
-            return send_json { error => 'Invalid param', param => $param};
+            return send_json { error => 'Invalid param', param => $param}, send_json_options;
         }
     }
     unless (map_plugins->{$params->{plugin}}) {
         status 400;
-        return send_json { error => 'Unknown plugin', plugin => $params->{plugin} };
+        return send_json { error => 'Unknown plugin', plugin => $params->{plugin} }, send_json_options;
     }
 
     my $res = try { $disbatch->queues->insert_one($params) } catch { Limper::warning "Could not create queue $params->{name}: $_"; $_ };
@@ -211,7 +213,7 @@ post '/queues' => sub {
         $reponse->{error} = "$res";
         $reponse->{ref $res}{result} = { ref $reponse->{ref $res}{result} => {%{$reponse->{ref $res}{result}}} } if ref $reponse->{ref $res}{result};
     }
-    send_json $reponse, convert_blessed => 1;
+    send_json $reponse, send_json_options;
 };
 
 post qr'^/queues/(?<queue>.+)$' => sub {
@@ -222,25 +224,25 @@ post qr'^/queues/(?<queue>.+)$' => sub {
 
     unless (keys %$params) {
         status 400;
-        return send_json {error => 'no params'};
+        return send_json {error => 'no params'}, send_json_options;
     }
     for my $param (keys %$params) {
         unless (grep $_ eq $param, @valid_params) {
             status 400;
-            return send_json { error => 'unknown param', param => $param};
+            return send_json { error => 'unknown param', param => $param}, send_json_options;
         }
     }
     if (exists $params->{plugin} and !map_plugins()->{$params->{plugin}}) {
         status 400;
-        return send_json { error => 'unknown plugin', plugin => $params->{plugin} };
+        return send_json { error => 'unknown plugin', plugin => $params->{plugin} }, send_json_options;
     }
     if (exists $params->{threads} and $params->{threads} !~ /^\d+$/) {
         status 400;
-        return send_json {error => 'threads must be a non-negative integer'};
+        return send_json {error => 'threads must be a non-negative integer'}, send_json_options;
     }
     if (exists $params->{name} and (ref $params->{name} or !($params->{name} // ''))){
         status 400;
-        return send_json {error => 'name must be a string'};
+        return send_json {error => 'name must be a string'}, send_json_options;
     }
 
     my $filter = try { {_id => MongoDB::OID->new(value => $queue)} } catch { {name => $queue} };
@@ -257,7 +259,7 @@ post qr'^/queues/(?<queue>.+)$' => sub {
         status 400;
         $reponse->{error} = "$res";
     }
-    send_json $reponse;
+    send_json $reponse, send_json_options;
 };
 
 del qr'^/queues/(?<queue>.+)$' => sub {
@@ -272,7 +274,7 @@ del qr'^/queues/(?<queue>.+)$' => sub {
         status 400;
         $reponse->{error} = "$res";
     }
-    send_json $reponse;
+    send_json $reponse, send_json_options;
 };
 
 # returns an MongoDB::OID object of either a simple string representation of the OID or a queue name, or undef if queue not found/valid
