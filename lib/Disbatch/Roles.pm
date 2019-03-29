@@ -60,9 +60,36 @@ sub new {
     bless $self, $class;
 }
 
+sub add_additional_perms {
+    my ($self, $name) = @_;
+    if (defined $self->{additional_perms} and $self->{additional_perms}{$name}) {
+        for my $collection (keys %{$self->{additional_perms}{$name}}) {
+            my ($privilege) = grep { $_->{resource}{collection} eq $collection } @{$self->{userroles}{$name}{privileges}};
+            if (!defined $privilege) {
+                #warn "Adding new privilege to role '$name' for collection '$collection'";
+                say "Adding new privilege to role '$name': collection '$collection', actions [ '", join("', '", @{$self->{additional_perms}{$name}{$collection}}), "' ]";
+                $privilege = { resource => { db => $self->{db}{name}, collection => $collection },  actions => $self->{additional_perms}{$name}{$collection} };
+                push @{$self->{userroles}{$name}{privileges}}, $privilege;
+                next;
+            }
+            for my $action (@{$self->{additional_perms}{$name}{$collection}}) {
+                if (grep { $action eq $_ } @{$privilege->{actions}}) {
+                    #warn "Action '$action' already exists for role '$name' collection '$collection' privilege";
+                    say "Privilege action '$action' already exists for '$collection' in role '$name'";
+                } else {
+                    #warn "Adding action '$action' to role '$name' collection '$collection' privilege";
+                    say "Adding privilege action '$action' for '$collection' to role '$name'";
+                    push @{$privilege->{actions}}, $action;
+                }
+            }
+        }
+    }
+}
+
 sub create_roles_and_users {
     my ($self) = @_;
     for my $name (keys %{$self->{userroles}}) {
+        $self->add_additional_perms($name);
         $self->{db}->run_command([createRole => $name, roles => [], privileges => $self->{userroles}{$name}{privileges} ]);
         $self->{db}->run_command([createUser => $name, pwd => $self->{userroles}{$name}{password}, roles => [ { role => $name, db => $self->{db}{name} } ]]);
     };
@@ -110,10 +137,11 @@ Disbatch::Roles - define and create MongoDB roles and users for Disbatch
 
 =item new
 
-Parameters: C<< db => $db, plugin_perms => $plugin_perms, disbatchd => $disbatchd_pw, disbatch_web => $disbatch_web_pw, task_runner => $task_runner_pw, queuebalance => queuebalance, plugin => $plugin_pw >>
+Parameters: C<< db => $db, plugin_perms => $plugin_perms, additional_perms => $additional_perms, disbatchd => $disbatchd_pw, disbatch_web => $disbatch_web_pw, task_runner => $task_runner_pw, queuebalance => queuebalance, plugin => $plugin_pw >>
 
   C<db> is a C<MongoDB::Database> object which must be authenticated with an accout having the C<root> role.
   C<plugin_perms> is a C<HASH> in the format of C<< { collection_name => array_of_actions, ... } >>, to give the plugin the needed permissions for MongoDB.
+  C<additional_perms> a C<HASH> in the format of C<< role_name => {collection_name => array_of_actions, ...}, ... } >>, to set additional permissions for included roles.
   C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin> are roles and users to create, with their values being their respective passwords.
 
 Dies if invalid parameters.

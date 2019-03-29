@@ -13,11 +13,12 @@ use Safe::Isa;
 use Term::ReadKey;
 use Try::Tiny::Retry;
 
-my ($config_file, $plugin_perms_file, $root_user, $create_root, $drop_roles);
+my ($config_file, $plugin_perms_file, $additional_perms_file, $root_user, $create_root, $drop_roles);
 
 GetOptions(
     'config=s' => \$config_file,
     'plugin_perms=s' => \$plugin_perms_file,
+    'additional_perms=s' => \$additional_perms_file,
     'root_user=s' => \$root_user,
     'create_root' => \$create_root,
     'drop_roles' => \$drop_roles,
@@ -29,6 +30,7 @@ $plugin_perms_file //= '/etc/disbatch/plugin-permissions.json';
 
 my $config = Cpanel::JSON::XS->new->relaxed->decode(scalar read_file $config_file);
 my $plugin_perms = Cpanel::JSON::XS->new->relaxed->decode(scalar read_file $plugin_perms_file);
+my $additional_perms = Cpanel::JSON::XS->new->relaxed->decode(scalar read_file $additional_perms_file) if defined $additional_perms_file;
 
 die "No mongohost name in $config_file" unless $config->{mongohost};
 die "No database name in $config_file" unless $config->{database};
@@ -52,7 +54,7 @@ $config->{attributes}{username} = $root_user;
 $config->{attributes}{password} = $root_password;
 
 my $test_db_root = MongoDB->connect($config->{mongohost}, $config->{attributes})->get_database($config->{database});
-my $roles = Disbatch::Roles->new(db => $test_db_root, plugin_perms => $plugin_perms, %{$config->{auth}});
+my $roles = Disbatch::Roles->new(db => $test_db_root, plugin_perms => $plugin_perms, additional_perms => $additional_perms, %{$config->{auth}});
 if ($drop_roles // 0) {
     say "Dropping the following roles and users in database '$config->{database}' on $config->{mongohost}: disbatchd, disbatch_web, task_runner";
     $roles->drop_roles_and_users;
@@ -99,6 +101,14 @@ Username of the MongoDB root user.
 Path to the JSON config file for C<plugin> permissions. Default is C</etc/disbatch/plugin-permissions.json>.
 
 No permissions are required, but note that L<Disbatch::Plugin::Demo> must be able to do C<insert> on the C<reports> collection.
+
+=item --additional_perms <string>
+
+Path to the JSON config file to set additional permissions for included roles. No default.
+
+If you have L<Disbatch::Web> load additional routes via C<config.web_extensions>, you may need to add permissions here.
+
+Note that C<POST /tasks/:id> and C<DELETE /tasks/:id> routes will not work without additional permissions. See file C<etc/disbatch/additional-permissions.json-example>.
 
 =item --create_root
 
