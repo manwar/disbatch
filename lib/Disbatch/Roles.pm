@@ -189,7 +189,7 @@ Ashley Willis <awillis@synacor.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2016 by Ashley Willis.
+This software is Copyright (c) 2016, 2019 by Ashley Willis.
 
 This is free software, licensed under:
 

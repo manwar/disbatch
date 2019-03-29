@@ -1,3 +1,9 @@
+/*
+ * This software is Copyright (c) 2015, 2019 by Ashley Willis.
+ * This is free software, licensed under:
+ *   The Apache License, Version 2.0, January 2004
+ */
+
 // underscores because copied from custom.js
 var _limit = 99;
 var _kcounter = new Array();

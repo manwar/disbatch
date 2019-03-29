@@ -1,5 +1,7 @@
 ### Running Disbatch 4
 
+Copyright (c) 2016 by Ashley Willis.
+
 * [Configure](Configuring.md) Disbatch before running
 
 * Start, stop, restart

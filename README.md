@@ -82,8 +82,11 @@ Matt Busigin (<mbusigin@hovernetworks.com>)
 
 #### Copyright and License
 
-This software is Copyright (c) 2016 by Ashley Willis.
+This software is Copyright (c) 2016, 2019 by Ashley Willis.
 
 This is free software, licensed under:
 
 > The Apache License, Version 2.0, January 2004
+
+Some web browser code in `etc/disbatch/htdocs/` includes third-party libraries copyright others and licensed under their own terms.
+See [THIRD-PARTY-LIBS](THIRD-PARTY-LIBS).

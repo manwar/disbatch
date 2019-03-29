@@ -15,3 +15,21 @@ while (1) {
     $qb->update();
     sleep 30;
 }
+
+__END__
+
+=head1 NAME
+
+QueueBalance
+
+=head1 AUTHORS
+
+Ashley Willis <awillis@synacor.com>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2015, 2019 by Ashley Willis.
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004

@@ -3,7 +3,7 @@ Version: <% (my $v = $zilla->version) =~ s/^v//; $v %>
 Release: 1%{?_dist}
 
 Summary: <% $zilla->abstract %>
-License: distributable
+License: <% $zilla->license->name %>
 Group: System/Cluster
 Vendor: <% $zilla->license->holder %>
 Source: <% $archive %>

@@ -306,3 +306,17 @@ post '/search-tasks-json' => sub {
 };
 
 1;
+
+=head1 AUTHORS
+
+Ashley Willis <awillis@synacor.com>
+
+Matt Busigin
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2016, 2019 by Ashley Willis.
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004

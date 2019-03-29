@@ -1,5 +1,7 @@
 ### Differences in Disbatch 4 compared to Disbatch 3
 
+Copyright (c) 2016 by Ashley Willis.
+
 #### Goals achieved with rewrite:
 - No more memory leak in main process.
 - No more locked up event bus via unix sockets (uses MongoDB to pass all data).

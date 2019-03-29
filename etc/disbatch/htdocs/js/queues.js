@@ -1,3 +1,9 @@
+/*
+ * This software is Copyright (c) 2016 by Ashley Willis.
+ * This is free software, licensed under:
+ *   The Apache License, Version 2.0, January 2004
+ */
+
 // gets JSON from a URL, parses it, and sends to callback
 function getOrPostJSON(method, url, callback, data) {
   if (!window.XMLHttpRequest) {

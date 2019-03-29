@@ -1,5 +1,7 @@
 ### Design of Disbatch 4
 
+Copyright (c) 2016 by Ashley Willis.
+
 This documents the Disbatch Execution Node (DEN) protocol and schema. All DENs
 using the same MongoDB database must follow this, as well as the Disbatch Task
 Runners (DTR) used by the DENs and any Disbatch Command Interfaces (DCI) using

@@ -1,5 +1,7 @@
 ### Configuring Disbatch 4
 
+Copyright (c) 2016 by Ashley Willis.
+
 #### Configure `/etc/disbatch/config.json`
 1. Copy `/etc/disbatch/config.json-example` to `/etc/disbatch/config.json`
 2. Make sure that only the process running Disbatch can read and edit

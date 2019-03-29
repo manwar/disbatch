@@ -1,5 +1,7 @@
 ### Upgrading from Disbatch 3 to Disbatch 4
 
+Copyright (c) 2016 by Ashley Willis.
+
 #### Preliminary steps
 
 - Rename the tasks and queues collections to `tasks` and `queues` if they have
