@@ -536,6 +536,72 @@ get qr'^/tasks/(?<id>[0-9a-f]{24})$' => sub {
     }
 };
 
+sub get_balance {
+    my $balance = $disbatch->balance->find_one() // { notice => 'balance document not found' };
+    delete $balance->{_id};
+    $balance->{known_queues} = [ $disbatch->queues->distinct("name")->all ];
+    $balance->{settings} = $disbatch->{config}{balance};	# { log => 1, verbose => 0, pretend => 0, enabled => 0 }
+    $balance;
+}
+
+sub post_balance {
+    my ($params, $options) = parse_params;
+    my $qb = $params;	# FIXME: WAT
+
+    # TODO: make this not all hardcoded:
+    my $error = try {
+        die join(',', sort keys %$qb) unless join(',', sort keys %$qb) =~ /^(?:disabled,)?max_tasks,queues$/;
+
+        if (defined $qb->{disabled}) {
+            die unless $qb->{disabled} =~ /^\d+$/;
+            die if $qb->{disabled} and $qb->{disabled} < time;
+        }
+
+        die unless ref $qb->{queues} eq 'ARRAY';
+        ref $_ eq 'ARRAY' or die for @{$qb->{queues}};
+        my @q;
+        my @known_queues = $disbatch->queues->distinct("name")->all;
+        for my $q (@{$qb->{queues}}) {
+            ref $_ and die ref $_ for @$q;
+            /^[\w-]+$/ or die for @$q;
+            for my $e (@$q) {
+                grep { /^$e$/ } @known_queues or die;
+            }
+            push @q, @$q;
+        }
+        my %q = map { $_ => undef } @q;
+        die unless @q == keys %q;
+        die unless join(',', sort @q) eq join(',', sort keys %q);
+
+        die unless ref $qb->{max_tasks} eq 'HASH';
+        /^\d+$/ or die for values %{$qb->{max_tasks}};
+        /^[*0-6] (?:[01]\d|2[0-3]):[0-5]\d$/ or die for keys %{$qb->{max_tasks}};
+        return undef;
+    } catch {
+        status 400;
+        return { status => 'failed: invalid json passed ' . $_ };
+    };
+    return $error if defined $error;
+
+    $_ += 0 for values %{$qb->{max_tasks}};
+
+    $disbatch->balance->update_one({}, {'$set' => $qb }, {upsert => 1});
+    { status => 'success: queuebalance modified' };
+};
+
+get '/balance' => sub {
+    my $want_json = want_json;
+    if ($want_json) {
+        send_json get_balance(), send_json_options, pretty => 1;
+    } else {
+        template 'balance.tt', get_balance();
+    }
+};
+
+post '/balance' => sub {
+    send_json post_balance(), send_json_options;
+};
+
 1;
 
 __END__
@@ -762,6 +828,20 @@ or C<< { "error": "queue not found" } >> on input error; C<< { "error": "Could n
 Sets HTTP status to C<400> on error.
 
 Note: new in 4.2, replaces C<POST /tasks/:queue> and C<POST /tasks/:queue/:collection>
+
+=item GET /balance
+
+Parameters: FIXME
+
+Returns FIXME
+
+=item POST /balance
+
+Parameters: FIXME
+
+Returns FIXME
+
+=back
 
 =head1 CUSTOM ROUTES
 

@@ -45,6 +45,12 @@ my $mongoport = get_free_port;
 
 # define config and make up a database name:
 my $config = {
+    balance => {
+        log => 1,
+        verbose => 0,
+        pretend => 0,
+        enabled => 0,
+    },
     mongohost => "localhost:$mongoport",
     database => "disbatch_test$$" . int(rand(10000)),
     attributes => { ssl => { SSL_verify_mode => 0x00 } },
@@ -52,7 +58,8 @@ my $config = {
         disbatchd => 'qwerty1',		# { username => 'disbatchd', password => 'qwerty1' },
         disbatch_web => 'qwerty2',	# { username => 'disbatch_web', password => 'qwerty2' },
         task_runner => 'qwerty3',	# { username => 'task_runner', password => 'qwerty3' },
-        plugin => 'qwerty4',		# { username => 'plugin', password => 'qwerty3' },
+        queuebalance => 'qwerty4',	# { username => 'queuebalance', password => 'qwerty4' },
+        plugin => 'qwerty5',		# { username => 'plugin', password => 'qwerty5' },
     },
     plugins => [ 'Disbatch::Plugin::Demo' ],
     web_extensions => {
@@ -749,6 +756,78 @@ if ($webpid == 0) {
     is $res->content_type, 'application/json', 'application/json';
     is $res->content, '[]', 'empty array';
 
+    # BALANCE TESTS:
+    # * get '/balance'		send_json get_balance(), send_json_options, pretty => 1;	template 'balance.tt', get_balance();
+    # * post '/balance'		send_json post_balance(), send_json_options;
+
+    # create some queues (and assume they succeed)
+    Net::HTTP::Client->request(POST => "$uri/queues", 'Content-Type' => 'application/json', encode_json({ name => $_, plugin => $plugin })) for qw/ oneoff bulk api /;
+
+    # get /balance (html)
+    $res = Net::HTTP::Client->request(GET => "$uri/balance", Accept => 'text/html');
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'text/html', 'text/html';
+    like $res->content, qr|<h2>QueueBalancer\b|, "response content looks good for GET /balance";
+
+    # get /balance
+    $res = Net::HTTP::Client->request(GET => "$uri/balance");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is_deeply $content, { known_queues => [ 'api', 'bulk', 'oneoff' ], notice => 'balance document not found', settings => $config->{balance} }, 'content matches excepted HASH';
+
+    # post /balance
+    $data = { max_tasks => {'* 07:00' => 1, '* 19:00' => 5}, queues => [ ['bulk'], ['api'], ['oneoff'] ] };
+    $res = Net::HTTP::Client->request(POST => "$uri/balance", 'Content-Type' => 'application/json', encode_json($data));
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is_deeply $content, { status => 'success: queuebalance modified' }, 'content matches excepted HASH';
+
+    # get /balance (with changes)
+    $res = Net::HTTP::Client->request(GET => "$uri/balance");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is_deeply $content, { known_queues => [ 'api', 'bulk', 'oneoff' ], max_tasks => $data->{max_tasks}, queues => $data->{queues}, settings => $config->{balance} }, 'content matches excepted HASH';
+
+    # post /balance (bad data)
+    my @bad_balance_data = (
+        {},														# empty
+        { max_tasks => {'7 07:00' => 1, '* 19:00' => 1}, queues => [['bulk'], ['api'], ['oneoff']]},			# invalid DOW
+        { max_tasks => {'* 07:00' => 1.1, '* 19:00' => 1}, queues => [['bulk'], ['api'], ['oneoff']]},			# invalid max size
+        #{ max_tasks => {'* 19:00' => 5, '* 19:00' => 1}, queues => [['bulk'], ['api'], ['oneoff']]},			# conflicting max_tasks entries - can't test this via perl, will change db! :/
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => [['bu lk'], ['api'], ['oneoff']]},			# invalid queue name
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => [['bulk,bulk'], ['api'], ['oneoff']]},		# dup queue name
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => [['bulk'], ['api', 'bulk'], ['oneoff']]},		# dup queue name
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => ['bulk', ['api'], ['oneoff']]},			# not array
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => 'bulk'},						# not array
+        { max_tasks => 'foo', queues => [['bulk'], ['api'], ['oneoff']]},						# not hash
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}},								# missing queues
+        { queues => [['bulk'], ['api'], ['oneoff']]},									# missing max_tasks
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => [['bulk'], ['api'], ['oneoff']], 'foo' => 'bar'},	# unknown key
+        { max_tasks => {'* 07:00' => 1, '* 19:00' => 1}, queues => [['bulk'], ['api'], ['oneoff', 'FOOBAR']]},		# unknown queue FOOBAR
+    );
+    for my $bad (@bad_balance_data) {
+        $res = Net::HTTP::Client->request(POST => "$uri/balance", 'Content-Type' => 'application/json', encode_json($bad));
+        is $res->status_line, '400 Bad Request', '400 Bad Request';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is join(',', sort keys $content), 'status', "content has key 'status'";
+        like $content->{status}, qr/^failed: invalid json passed\b/, 'status message';
+    }
+
+    # get /balance (make sure we haven't actually changed anything with our bad data above)
+    $res = Net::HTTP::Client->request(GET => "$uri/balance");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is_deeply $content, { known_queues => [ 'api', 'bulk', 'oneoff' ], max_tasks => $data->{max_tasks}, queues => $data->{queues}, settings => $config->{balance} }, 'content matches excepted HASH';
 
     done_testing;
 }

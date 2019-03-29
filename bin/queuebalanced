@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+
+use 5.12.0;
+use warnings;
+
+use Disbatch;
+use Disbatch::QueueBalance;
+use Getopt::Long;
+
+$| = 1;
+my $config_file = '/etc/disbatch/config.json';
+GetOptions('config=s' => \$config_file);
+my $qb = Disbatch::QueueBalance->new($config_file);
+while (1) {
+    $qb->update();
+    sleep 30;
+}

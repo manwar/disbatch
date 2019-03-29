@@ -10,7 +10,7 @@ sub new {
     my $class = shift;
     my $self = { @_ };
     die "A MongoDB::Database object must be passed as 'db'" unless ref ($self->{db} // '') eq 'MongoDB::Database';
-    die "Passwords for accounts must be passed as 'disbatchd', 'disbatch_web', 'task_runner', and 'plugin'" unless $self->{disbatchd} and $self->{disbatch_web} and $self->{task_runner} and $self->{plugin};
+    die "Passwords for accounts must be passed as 'disbatchd', 'disbatch_web', 'task_runner', 'queuebalance', and 'plugin'" unless $self->{disbatchd} and $self->{disbatch_web} and $self->{task_runner} and $self->{queuebalance} and $self->{plugin};
 
     $self->{userroles} = {
         disbatchd => {
@@ -28,6 +28,7 @@ sub new {
             password => $self->{disbatch_web},
             privileges => [
                 { resource => { db => $self->{db}{name}, collection => '' }, actions => [ 'find', 'listIndexes' ] },
+                { resource => { db => $self->{db}{name}, collection => 'balance' },  actions => [ 'insert', 'update' ] },	# insert needed because 'upsert'
                 { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'find', 'update' ] },
                 { resource => { db => $self->{db}{name}, collection => 'queues' },  actions => [ 'insert', 'update', 'remove' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'insert' ] },
@@ -41,6 +42,14 @@ sub new {
                 { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'update' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks.chunks' },  actions => [ 'insert' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks.files' },  actions => [ 'insert' ] },
+            ],
+        },
+        queuebalance => {
+            password => $self->{queuebalance},
+            privileges => [
+                { resource => { db => $self->{db}{name}, collection => 'balance' },  actions => [ 'find', 'insert', 'update' ] },
+                { resource => { db => $self->{db}{name}, collection => 'queues' },  actions => [ 'find', 'update' ] },
+                { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'find' ] },	# for count
             ],
         },
         plugin => {
@@ -101,11 +110,11 @@ Disbatch::Roles - define and create MongoDB roles and users for Disbatch
 
 =item new
 
-Parameters: C<< db => $db, plugin_perms => $plugin_perms, disbatchd => $disbatchd_pw, disbatch_web => $disbatch_web_pw, task_runner => $task_runner_pw, plugin => $plugin_pw >>
+Parameters: C<< db => $db, plugin_perms => $plugin_perms, disbatchd => $disbatchd_pw, disbatch_web => $disbatch_web_pw, task_runner => $task_runner_pw, queuebalance => queuebalance, plugin => $plugin_pw >>
 
   C<db> is a C<MongoDB::Database> object which must be authenticated with an accout having the C<root> role.
   C<plugin_perms> is a C<HASH> in the format of C<< { collection_name => array_of_actions, ... } >>, to give the plugin the needed permissions for MongoDB.
-  C<disbatchd>, C<disbatch_web>, C<task_runner>, and C<plugin> are roles and users to create, with their values being their respective passwords.
+  C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin> are roles and users to create, with their values being their respective passwords.
 
 Dies if invalid parameters.
 
@@ -113,7 +122,7 @@ Dies if invalid parameters.
 
 Parameters: none.
 
-Creates the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, and C<plugin>.
+Creates the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin>.
 
 Dies if the roles or users already exist, or on any other MongoDB error.
 
@@ -121,7 +130,7 @@ Dies if the roles or users already exist, or on any other MongoDB error.
 
 Parameters: none.
 
-Drops the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, and C<plugin>.
+Drops the roles and users for C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin>.
 
 Dies if the roles or users don't exist(???), or on any other MongoDB error.
 

@@ -68,6 +68,7 @@ sub mongo {
         $username = 'disbatchd' if $self->{class} eq 'disbatch';
         $username = 'disbatch_web' if $self->{class} eq 'disbatch::web';
         $username = 'task_runner' if $self->{class} eq 'task_runner';
+        $username = 'queuebalance' if $self->{class} eq 'disbatch::queuebalance';
         $attributes{username} = $username;
         $attributes{password} = $self->{config}{auth}{$username};
         $attributes{db_name} = $self->{config}{database};
@@ -78,6 +79,7 @@ sub mongo {
 sub nodes  { $_[0]->mongo->coll('nodes') }
 sub queues { $_[0]->mongo->coll('queues') }
 sub tasks  { $_[0]->mongo->coll('tasks') }
+sub balance { $_[0]->mongo->coll('balance') }
 
 # loads the config file at startup.
 # anything in the config file at startup is static and cannot be changed without restarting disbatchd
@@ -461,6 +463,12 @@ Returns a L<MongoDB::Collection> object for collection "queues".
 Parameters: none
 
 Returns a L<MongoDB::Collection> object for collection "tasks".
+
+=item balance
+
+Parameters: none
+
+Returns a L<MongoDB::Collection> object for collection "balance".
 
 =item load_config
 

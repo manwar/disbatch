@@ -88,7 +88,7 @@ Path to the JSON Disbatch config file.
 
 The config file must have keys for C<mongohost> and C<database>.
 
-It must also have the key C<auth> which is a hash with keys C<disbatchd>, C<disbatch_web>, and C<task_runner> whose values are the passwords for those MongoDB disbatch users.
+It must also have the key C<auth> which is a hash with keys C<disbatchd>, C<disbatch_web>, C<task_runner>, C<queuebalance>, and C<plugin> whose values are the passwords for those MongoDB disbatch users.
 
 =item --root_user <string>
 
