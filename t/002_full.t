@@ -45,6 +45,7 @@ my $mongoport = get_free_port;
 
 # define config and make up a database name:
 my $config = {
+    monitoring => 1,
     balance => {
         log => 1,
         verbose => 0,
@@ -755,6 +756,39 @@ if ($webpid == 0) {
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     is $res->content, '[]', 'empty array';
+
+    # MONITORING TESTS:
+    # * get '/monitoring'	send_json checks(), send_json_options;
+    # FIXME: this just runs one test based on the config settings above and not all possibilities, as changing settings requires restarting Disbatch::Web, and i don't want to figure out how to do that here rn
+    my $monitoring;
+    if ($disbatch->{config}{monitoring}) {
+        if ($disbatch->{config}{balance}{enabled}) {
+            my $time = time;	# FIXME: this is hacky, but should usually work. slight chance the response if off by 1 tho. alternatively, we could check a regex against $res->content since canonical is used.
+            $monitoring = { disbatch => { status => 'OK', message => 'Disbatch is running on one or more nodes' }, queuebalance => { status => 'CRITICAL', message => "queuebalanced not running for ${time}s" } };
+        } else {
+            my $hostname = hostname;
+            $monitoring = { disbatch => { status => 'OK', message => 'Disbatch is running on one or more nodes', nodes => { fresh => { $hostname => 1 } } }, queuebalance => { status => 'OK', message => 'queuebalance disabled' } };
+        }
+    } else {
+        $monitoring = { disbatch => { status => 'OK', message => 'monitoring disabled' }, queuebalance => { status => 'OK', message => 'monitoring disabled' } };
+    };
+    $res = Net::HTTP::Client->request(GET => "$uri/monitoring");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    for my $type (qw/ disbatch queuebalance /) {
+        for my $field (qw/ status message /) {
+            is $content->{$type}{$field}, $monitoring->{$type}{$field}, "monitoring $type $field";
+        }
+    }
+    if ($monitoring->{disbatch}{nodes}) {
+        for my $status (keys %{$monitoring->{disbatch}{nodes}}) {
+            for my $host (keys %{$monitoring->{disbatch}{nodes}{$status}}) {
+                ok exists $monitoring->{disbatch}{nodes}{$status}{$host}, "monitoring node $status $host exists";
+            }
+        }
+    }
 
     # BALANCE TESTS:
     # * get '/balance'		send_json get_balance(), send_json_options, pretty => 1;	template 'balance.tt', get_balance();

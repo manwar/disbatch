@@ -602,6 +602,65 @@ post '/balance' => sub {
     send_json post_balance(), send_json_options;
 };
 
+# For Disbatch basic status.
+# Returns hash with keys status and message.
+# NOTE: this *is* disbatch (web). but we now check if any nodes are running, instead of if the web server is running on a list of hosts (as old disbatch was monolithic)
+sub check_disbatch {
+    try {
+        # $nodes is an ARRAY of nodes, each HASH has a 'timestamp' field (in ms) so you can tell if it's running, as well as 'node' and 'id'
+        my $nodes = get_nodes;
+        if (!@$nodes) {
+            return { status => 'WARNING', message => 'No Disbatch nodes found' };
+        }
+        my $status = {};
+        my $now = time;
+        for my $node (@$nodes) {
+            my $timestamp = int($node->{timestamp} / 1000);
+            if ($timestamp + 60 < $now) {
+                # old
+                $status->{stale}{$node->{node}} = $now - $timestamp;
+            } else {
+                $status->{fresh}{$node->{node}} = $now - $timestamp;
+            }
+        }
+        if (keys %{$status->{fresh}}) {
+            return { status => 'OK', message => 'Disbatch is running on one or more nodes', nodes => $status };
+        } else {
+            return { status => 'CRITICAL', message => 'No active Disbatch nodes found', nodes => $status };
+        }
+    } catch {
+        return { status => 'CRITICAL', message => "Could not get current Disbatch nodes: $_" };
+    };
+}
+
+sub check_queuebalance {
+    my ($time_diff) = @_;
+    return { status => 'OK', message => 'queuebalance disabled' } unless $disbatch->{config}{balance}{enabled};
+    # FIXME: return some sort of OK status if 'balance' collection doesn't exist (no QueueBalance) or $qb below is undef
+    my $qb = $disbatch->balance->find_one({}, {status => 1, message => 1, timestamp => 1, _id => 0});
+    return $qb if $qb->{status} eq 'CRITICAL' and !exists $qb->{timestamp}; # error via _mongo()	# FIXME: this will never happen because rewrite (wait why??), but maybe should check for timestamp anyway
+    my $timestamp = delete $qb->{timestamp};
+    return { status => 'CRITICAL' , message => 'queuebalanced not running for ' . (time - $timestamp) . 's' } if $timestamp < time - $time_diff;
+    return $qb if $qb->{status} =~ /^(?:OK|WARNING|CRITICAL)$/;
+    return { status => 'CRITICAL', message => 'queuebalanced unknown status', result => $qb };
+}
+
+sub checks {
+    my $checks = {};
+    if ($disbatch->{config}{monitoring}) {
+        $checks->{disbatch} = check_disbatch();
+        $checks->{queuebalance} = check_queuebalance(60);	# FIXME: don't hardcode $time_diff (60) for queuebalance status?
+    } else {
+        $checks->{disbatch} = { status => 'OK', message => 'monitoring disabled' };
+        $checks->{queuebalance} = { status => 'OK', message => 'monitoring disabled' };
+    }
+    $checks;
+}
+
+get '/monitoring' => sub {
+    send_json checks(), send_json_options;
+};
+
 1;
 
 __END__
@@ -842,6 +901,15 @@ Parameters: FIXME
 Returns FIXME
 
 =back
+
+=item GET /monitoring
+
+Params: none
+
+Returns C<{"disbatch":{"status":status,"message":message},"queuebalance":{"status":qb_status,"message":qb_message}}>, where C<status> and C<qb_status> will be C<OK> or C<CRITICAL>
+
+If C<config.monitoring> is false, status will be C<OK> and message will be C<monitoring disabled> for both.
+If C<config.balance.enabled> is false, status will be C<OK> and message will be C<queuebalance disabled> for C<queuebalance>.
 
 =head1 CUSTOM ROUTES
 
