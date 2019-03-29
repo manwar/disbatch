@@ -4,9 +4,11 @@ use 5.12.0;
 use strict;
 use warnings;
 
+use Clone qw/clone/;
 use Cpanel::JSON::XS;
 use Data::Dumper;
 use Disbatch;
+use Disbatch::Web::Query;
 use Exporter qw/ import /;
 use File::Slurp;
 use Limper::SendFile;
@@ -21,6 +23,9 @@ use Try::Tiny::Retry;
 use URL::Encode qw/url_params_mixed/;
 
 our @EXPORT = qw/ parse_params send_json_options template /;
+
+my $oid_keys = [ qw/ queue / ];	# NOTE: in addition to _id
+my $util = Disbatch::Web::Query->new();	# query()
 
 sub send_json_options { allow_blessed => 1, canonical => 1, convert_blessed => 1, pretty => 0 }		# from remotecontrol/config.yml
 
@@ -322,6 +327,215 @@ sub create_tasks {
     $res;
 }
 
+sub post_tasks {
+    my ($legacy_params) = @_;
+    undef $disbatch->{mongo};
+    my $params = parse_params;
+    # NEW:
+    # { "queue": queue, "params": single_task_params }
+    # { "queue": queue, "params": [single_task_params, another_task_params, ...] }
+    # { "queue": queue, "params": generic_task_params, "collection": collection, "filter": collection_filter }
+
+    $params = { params => $params } if ref $params eq 'ARRAY';
+    $params = { %$params, %$legacy_params } if defined $legacy_params;
+
+    my $queue_id = get_queue_oid($params->{queue});
+    unless (defined $queue_id) {
+        status 400;
+        return send_json { error => 'queue not found' }, send_json_options;
+    }
+
+    my $task_params = $params->{params};
+    my $keys = join(',', sort keys %$params);
+    # { "queue": queue, "params": single_task_params }
+    # NOTE: wait does anything use this??
+    if ($keys eq 'params,queue' and ref $task_params eq 'HASH') {
+        $task_params = [$task_params];
+    }
+    # { "queue": queue, "params": [single_task_params, another_task_params, ...] }
+    if ($keys eq 'params,queue' and ref $task_params eq 'ARRAY') {
+        # validate array of hash params
+        if (!@$task_params or grep { ref $_ ne 'HASH' } @$task_params) {
+            status 400;
+            return send_json { error => "'params' must be a JSON array of task params objects" }, send_json_options;
+        } elsif (grep { keys %$_ == 0 } @$task_params) {
+            status 400;
+            return send_json { error => "'params' must be a JSON array of task params objects with key/value pairs" }, send_json_options;
+        }
+        # $task_params is ready
+    # { "queue": queue, "params": generic_task_params, "collection": collection, "filter": collection_filter }
+    } elsif ($keys eq 'collection,filter,params,queue' and ref $task_params eq 'HASH') {
+        # validate and parse
+        # {"migration":"foo"}
+        # {"migration":"document.migration","user1":"document.username"}
+        if (ref $params->{filter} ne 'HASH') {
+            status 400;
+            return send_json { error => "'filter' must be a JSON object" }, send_json_options;
+        } elsif (!ref $params->{collection} eq '' or !$params->{collection}) {
+            status 400;
+            return send_json { error => "'collection' required and must be a scalar (string)'" }, send_json_options;
+        }
+
+        my @fields = grep /^document\./, values %$task_params;
+        my %fields = map { s/^document\.//; $_ => 1 } @fields;
+
+        my $cursor = $disbatch->mongo->coll($params->{collection})->find($params->{filter})->fields(\%fields);
+        # FIXME: maybe fail unless $cursor->has_next
+        my @tasks;
+        my $error;
+        try {
+            # NOTE: yes, this loads all of them into @tasks
+            while (my $doc = $cursor->next) {
+                my $task = clone $task_params;
+                for my $key (keys %$task) {
+                    if ($task->{$key} =~ /^document\./) {
+                        for my $field (@fields) {
+                            my $f = quotemeta $field;
+                            if ($task->{$key} =~ /^document\.$f$/) {
+                                $task->{$key} = $doc->{$field};
+                            }
+                        }
+                    }
+                }
+                push @tasks, $task;
+            }
+        } catch {
+            Limper::warning "Could not iterate on collection $params->{collection}: $_";
+            $error = "$_";
+        };
+        if (defined $error) {
+            status 400;
+            return send_json { error => $error }, send_json_options;
+        }
+        $task_params = \@tasks;
+        # $task_params is ready
+    } else {
+        # fail
+        status 400;
+        return send_json { error => 'invalid parameters passed' }, send_json_options;
+    }
+
+    my $res = create_tasks($queue_id, $task_params);	# doing 100k at once only take 12 seconds on my 13" rMBP
+
+    my $reponse = {
+        ref $res => {%$res},
+    };
+    unless (@{$res->{inserted}}) {
+        status 400;
+        $reponse->{error} = 'Unknown error';
+    }
+    send_json $reponse, send_json_options;
+};
+
+post '/tasks' => sub {
+    post_tasks();
+};
+
+=item GET /tasks
+
+Parameters: FIXME (was: valid options according to the tasks->query schema.)
+
+Returns FIXME (was: valid fields to search for tasks if invalid or no parameters), or the results of the search, in JSON.
+
+FIXME: in query.tt at least toggleGroup() should run at $(document).ready() when returning a form because of invalid params, instead of only showing the limit (bug is there, not at all here)
+
+=cut
+
+# NOTE: handles .terse, .full, and .epoch for GET /tasks.json
+# * 'ctime' and 'mtime' are like 2019-01-23T19:42:56, unless .epoch, which will make them hires epoch times (float)
+# * 'stdout' and 'stderr' are actual content, unless .terse for "[terse mode]" or .full to replace with gfs docs
+# * the following are equivalent:
+#   $ curl 'http://localhost:3002/tasks.json?.pretty=1&status=1&.terse=1&.epoch=1'
+#   $ curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:8080/tasks.json
+# * and get you a result like default POST /tasks/search:
+#   $ curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:8080/tasks/search
+# NOTE: i hate this, but it should maybe be here for backcompat
+sub _munge_tasks {
+    my ($tasks, $options) = @_;
+    $tasks = [$tasks] if ref $tasks eq 'HASH';	# NOTE: if $options->{'.limit'} is 1
+    for my $task (@$tasks) {
+        for my $type (qw/stdout stderr/) {
+            if ($options->{'.terse'}) {
+                $task->{$type} = '[terse mode]' if defined $task->{$type} and !$task->{$type}->$_isa('MongoDB::OID') and $task->{$type};
+            } elsif ($options->{'.full'} // 0 and $task->{$type}->$_isa('MongoDB::OID')) {
+                $task->{$type} = try { $disbatch->get_gfs($task->{$type}) } catch { Limper::warning "Could not get task $task->{_id} $type: $_"; $task->{$type} };
+            }
+        }
+        if ($options->{'.epoch'}) {
+            for my $type (qw/ctime mtime/) {
+                $task->{$type} = $task->{$type}->hires_epoch if ref $task->{$type} eq 'DateTime';
+            }
+        }
+    }
+}
+
+get '/tasks' => sub {
+    undef $disbatch->{mongo};	# FIXME: why is this added?
+    my ($params, $options) = parse_params;	# NOTE: $options may contain: .limit .skip .count .pretty .terse .epoch .full
+    $params = undef if defined $params and $params eq '';	# FIXME: maybe move to parse_params() above
+    my $want_json = want_json;
+
+    my $indexes = $util->get_indexes($disbatch->tasks);
+    my $schema = {
+            verb => 'GET',
+            limit => 100,
+            title => 'Disbatch Tasks Query',
+            subtitle => 'Warning: this can return a LOT of data!',
+            params => +{ map { map { $_ => { repeatable => 'yes', type => ['string' ]} } @$_ } @$indexes },
+    };
+    if (!$want_json and !%$params and !%$options) {
+        my $result = { schema => $schema, indexes => $indexes };
+        return template 'query.tt', $result;
+    }
+
+    my $result = $util->query($params, $options, $schema->{title}, $oid_keys, $disbatch->tasks, request->{path}, $want_json, $indexes);
+    if ($want_json) {
+        status 400 if ref $result ne 'ARRAY' and exists $result->{error};
+        _munge_tasks($result, $options);
+        send_json $result, send_json_options, pretty => $options->{'.pretty'} // 0;
+    } else {
+        if (exists $result->{error}) {
+            $result->{schema} = $schema;
+            $result->{schema}{error} = $result->{error};
+            status 400;
+        }
+        _munge_tasks($result, $options);	# FIXME: do we want _munge_tasks() here too? well let's TIAS
+        template 'query.tt', $result;
+    }
+};
+
+
+=item GET /tasks/:id
+
+Parameters: Task OID in URL
+
+Returns the task matching OID as JSON, or C<{ "error": "no task with id :id" }> and status C<404> if OID not found.
+Or, via a web browser (based on C<Accept> header value), returns the task matching OID with some formatting, or C<No tasks found matching query> if OID not found.
+
+=cut
+
+get qr'^/tasks/(?<id>[0-9a-f]{24})$' => sub {
+    my $title = "Disbatch Single Task Query";
+    my $want_json = want_json;
+    my $result = $util->query({id => $+{id}}, {'.limit' => 1}, $title, $oid_keys, $disbatch->tasks, request->{path}, $want_json, [['id']]);
+    if ($want_json) {
+        if (!keys %$result) {
+            status 404;
+            $result = { error => "no task with id $+{id}" };
+        } elsif (exists $result->{error}) {
+            status 400;
+        }
+        send_json $result, send_json_options, pretty => 1;
+    } else {
+        if (!defined $result->{result}) {
+            status 404;
+        } elsif (exists $result->{error}) {
+            status 400;
+        }
+        template 'query.tt', $result;
+    }
+};
+
 1;
 
 __END__
@@ -504,6 +718,50 @@ Returns: C<< { ref $res: Object } >> on success, or C<< { ref $res: Object, "err
 Sets HTTP status to C<400> on error.
 
 Note: replaces /delete-queue-json
+
+=item GET /tasks.json
+
+WARNING: everything in this section is for the old  C<POST /tasks/search>!
+
+Parameters: C<< { "filter": filter, "options": options, "count": count, "terse": terse } >>
+
+All parameters are optional.
+
+C<filter> is a filter expression (query) object.
+
+C<options> is an object of desired options to L<MongoDB::Collection#find>.
+
+If not set, C<options.limit> will be C<100>. This will fail if you try to set it above C<100>.
+
+C<count> is a boolean. Instead of an array of task documents, the count of task documents matching the query will be returned.
+
+C<terse> is a boolean. If C<true>, the the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
+If C<false>, the full content of C<stdout> and C<stderr> will be returned. Default is C<true>.
+
+Returns: Array of task Objects or C<< { "count": $count } >> on success; C<< { "error": "filter and options must be name/value objects" } >>,
+C<< { "error": "limit cannot exceed 100" } >>, or C<< { "error": "Bad OID passed: $error" } >> on input error;
+or C<< { "error": "$error" } >> on count or search error.
+
+Sets HTTP status to C<400> on error.
+
+Note: replaces C<POST /tasks/search>
+
+=item POST /tasks?queue=:queue[&collection=:collection]
+
+URL: C<:queue> is the C<_id> if it matches C</\A[0-9a-f]{24}\z/>, or C<name> if it does not. C<:collection> is a MongoDB collection name.
+
+Parameters: an array of task params objects if not passing a C<collection> in the URL, or C<< { "filter": filter, "params": params } >>
+
+C<filter> is a filter expression (query) object for the C<:collection> collection.
+
+C<params> is an object of task params. To insert a document value from a query into the params, prefix the desired key name with C<document.> as a value.
+
+Returns: C<< { ref $res: Object } >> on success; C<< { "error": "params must be a JSON array of task params" } >>, C<< { "error": "filter and params required and must be name/value objects" } >>
+or C<< { "error": "queue not found" } >> on input error; C<< { "error": "Could not iterate on collection $collection: $error" } >> on query error, or C<< { ref $res: Object, "error": "Unknown error" } >> on MongoDB error.
+
+Sets HTTP status to C<400> on error.
+
+Note: new in 4.2, replaces C<POST /tasks/:queue> and C<POST /tasks/:queue/:collection>
 
 =head1 CUSTOM ROUTES
 

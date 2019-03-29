@@ -28,8 +28,9 @@ sub deserialize_oid {
     $object;
 }
 
+# NOTE: search() was "post '/tasks/search'" but for some reason it conflicts with the next route and i don't feel like fixing Limper rn
 # see https://metacpan.org/pod/MongoDB::Collection#find
-post '/tasks/search' => sub {
+sub search {
     undef $disbatch->{mongo};
     my $params = parse_params;
 
@@ -96,93 +97,15 @@ post '/tasks/search' => sub {
 };
 
 post qr'^/tasks/(?<queue>[^/]+)$' => sub {
-    undef $disbatch->{mongo};
-    my $params = parse_params;
-    unless (defined $params and ref $params eq 'ARRAY' and @$params and ! grep { ref $_ ne 'HASH' } @$params) {
-        status 400;
-        return send_json { error => 'params must be a JSON array of task params objects' }, send_json_options;
+    if ($+{queue} eq 'search') {
+        search();
+    } else {
+        Disbatch::Web::post_tasks({ queue => $+{queue} });
     }
-    if (grep { keys $_ == 0 } @$params) {
-        status 400;
-        return send_json { error => 'params must be a JSON array of task params objects with key/value pairs' }, send_json_options;
-    }
-
-    my $queue_id = get_queue_oid($+{queue});
-    unless (defined $queue_id) {
-        status 400;
-        return send_json { error => 'queue not found' }, send_json_options;
-    }
-
-    my $res = create_tasks($queue_id, $params);
-
-    my $reponse = {
-        ref $res => {%$res},
-    };
-    unless (@{$res->{inserted}}) {
-        status 400;
-        $reponse->{error} = 'Unknown error';
-    }
-    send_json $reponse, send_json_options;
 };
 
 post qr'^/tasks/(?<queue>.+?)/(?<collection>.+)$' => sub {
-    undef $disbatch->{mongo};
-    my $params = parse_params;
-    # {"migration":"foo"}
-    # {"migration":"document.migration","user1":"document.username"}
-    unless (defined $params->{filter} and ref $params->{filter} eq 'HASH' and defined $params->{params} and ref $params->{params} eq 'HASH') {
-        status 400;
-        return send_json { error => 'filter and params required and must be name/value objects' }, send_json_options;
-    }
-
-    my $collection = $+{collection};
-    my $queue_id = get_queue_oid($+{queue});
-    unless (defined $queue_id) {
-        status 400;
-        return send_json { error => 'queue not found' }, send_json_options;
-    }
-
-    my @fields = grep /^document\./, values %{$params->{params}};
-    my %fields = map { s/^document\.//; $_ => 1 } @fields;
-
-    my $cursor = $disbatch->mongo->coll($collection)->find($params->{filter})->fields(\%fields);
-    my @tasks;
-    my $error;
-    try {
-        while (my $doc = $cursor->next) {
-            my $task = { %{$params->{params}} };	# copy it
-            for my $key (keys %$task) {
-                if ($task->{$key} =~ /^document\./) {
-                    for my $field (@fields) {
-                        my $f = quotemeta $field;
-                        if ($task->{$key} =~ /^document\.$f$/) {
-                            $task->{$key} = $doc->{$field};
-                        }
-                    }
-                }
-            }
-            push @tasks, $task;
-        }
-    } catch {
-        Limper::warning "Could not iterate on collection $collection: $_";
-        $error = "$_";
-    };
-
-    if (defined $error) {
-        status 400;
-        return send_json { error => $error }, send_json_options;
-    }
-
-    my $res = create_tasks($queue_id, \@tasks);	# doing 100k at once only take 12 seconds on my 13" rMBP
-
-    my $reponse = {
-        ref $res => {%$res},
-    };
-    unless (@{$res->{inserted}}) {
-        status 400;
-        $reponse->{error} = 'Unknown error';
-    }
-    send_json $reponse, send_json_options;
+    Disbatch::Web::post_tasks({ queue => $+{queue}, collection => $+{collection} });
 };
 
 1;

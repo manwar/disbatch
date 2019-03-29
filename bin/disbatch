@@ -22,10 +22,16 @@ my $config_file = '/etc/disbatch/config.json';
 my $ssl_ca_file;
 my $disable_ssl_verification = 0;
 my $collection;
+# below vars only for get_tasks() and possibly post_search()
 my $count = 0;
-my $terse = 1;
+my $fields;
+my $limit = 20;
+my $skip = 0;
+my $epoch = 0;
+my $terse;	# NOTE: undefined because default in deprecated post_search() is 1 while default in new get_tasks() is 0
+my $full = 0;
 my $pretty = 0;
-my $options;
+my $options;	# DEPRECATED, for post_search()
 
 GetOptions(
     'url|u=s'       => \$url,
@@ -37,9 +43,14 @@ GetOptions(
     'disable_ssl_verification' => \$disable_ssl_verification,
     'collection=s'  => \$collection,
     'count'         => \$count,
+    'fields=s'      => \$fields,
+    'limit=i'       => \$limit,
+    'skip'          => \$skip,
+    'epoch'         => \$epoch,
     'terse!'        => \$terse,
+    'full'          => \$full,
     'pretty'        => \$pretty,
-    'options=s'     => \$options,
+    'options=s'     => \$options,	# DEPRECATED, for post_search()
 );
 
 pod2usage(-verbose => 2, -exitval => 0) if $help;
@@ -86,7 +97,9 @@ if ($command eq 'plugins') {
     post_task();
 } elsif ($command eq 'create-tasks') {
     post_tasks();
-} elsif ($command eq 'search') {
+} elsif ($command eq 'tasks') {
+    get_tasks();
+} elsif ($command eq 'search') {	# DEPRECATED: requires Disbatch::Web::Tasks
     post_search();
 } elsif ($command) {
     die "Unknown command '$command'\n";
@@ -199,13 +212,45 @@ sub post_tasks {	# <queue> <json_array>					# JSON array of task params objects
     }
 }
 
+# from old Disbatch::Web post '/tasks/search'
+# POST /tasks/search
+# * 'ctime' and 'mtime' are like 1548272576.574
+# * 'stdout' and 'stderr' are "[terse mode]"
+# * curl -XPOST -H'Content-Type: application/json' -d '{"filter":{"status":1},"pretty":1}' http://localhost:3002/tasks/search
+# GET /tasks.json
+# * 'ctime' and 'mtime' are like 2019-01-23T19:42:56
+# * 'stdout' and 'stderr' are actual content
+# * curl 'http://localhost:3002/tasks.json?.pretty=1&status=1&.terse=1&.epoch=1'
+# * curl -XGET -H'Content-Type: application/json' -d'{"status":1,".pretty":1,".terse":1,".epoch":1}' http://localhost:3002/tasks.json
+
+# /home/awillis/git/disbatch/bin/disbatch --url http://localhost:3002 search '{"status":1}'
+# NOTE: options passed may include: .count .fields .limit .skip .terse .full .epoch .pretty
+sub get_tasks {		# <filter>						# {filter: filter, options: options, count: count, terse: terse}
+    my ($params) = @ARGV;
+
+    $params = defined $params ? try { $_ = $json->decode($params); die unless ref eq 'HASH'; $_ } catch { die "Invalid filter is not a JSON object: '$params'\n" } : {};
+    my $options = { '.count' => $count, '.fields' => $fields, '.limit' => $limit, '.skip' => $skip, '.terse' => ($terse // 0), '.full' => $full, '.epoch' => $epoch, '.pretty' => $pretty };
+    my $data = $json->encode({ %$options, %$params });
+    my $response = $ua->get("$url/tasks.json", 'Content-Type' => 'application/json', Content => $data);
+    if ($response->is_success) {
+        if ($count) {
+            say $json->decode($response->decoded_content)->{count}, ' tasks';
+        } else {
+            say $response->decoded_content;	# Array of task Objects
+        }
+    } else {
+        die "Error getting $url/tasks.json (", $response->status_line, '): ', $response->decoded_content, "\n";
+    }
+}
+
+# DEPRECATED: requires Disbatch::Web::Tasks
 sub post_search {	# <filter>						# {filter: filter, options: options, count: count, terse: terse}
     my ($filter) = @ARGV;
 
     $filter = try { $json->decode($filter) } catch { die "Invalid filter is not JSON: '$filter'\n" } if defined $filter;
     $options = try { $json->decode($options) } catch { die "Invalid --options is not JSON: '$options'\n" } if defined $options;
 
-    my $data = $json->encode({ filter => $filter, count => $count, terse => $terse, pretty => $pretty, options => $options });
+    my $data = $json->encode({ filter => $filter, count => $count, terse => ($terse // 1), pretty => $pretty, options => $options });
     my $response = $ua->post("$url/tasks/search", 'Content-Type' => 'application/json', Content => $data);
     if ($response->is_success) {
         if ($count) {
@@ -409,7 +454,43 @@ Error examples:
   $ disbatch --collection DNE create-tasks 579a7059eb6af87dcc6ef4e2 '{"filter":{"migration":"foo"},"params":{"user":"document.username"}}'
   Error posting http://localhost:8080/tasks/test/DNE (400 Bad Request): {"MongoDB::InsertManyResult":{"acknowledged":1,"inserted":[],"write_concern_errors":[],"write_errors":[]},"error":"Unknown error"}
 
+=item tasks [<json_filter>] [[--limit <limit>] [--skip <skip>] [--noterse] [--epoch] [--pretty] | [--count]]
+
+FIXME: add --limit, --skip, and --epoch options, and maybe add --full and --fields options
+
+Returns a JSON array of task documents matching the JSON query given. Note that blessed values may be munged to be proper JSON. Limit of C<20> documents returned by default.
+
+  $ disbatch tasks '{"queue":"56eade3aeb6af81e0123ed21"}'
+  [{"ctime":1469805221.996,"stderr":null,"status":-2,"mtime":1469805221.996,"_id":{"$oid":"579b72a5eb6af86a8f5220f1"},"node":null,"params":{"migration":"foo","user":"ashley"},"queue":{"$oid":"56eade3aeb6af81e0123ed21"},"stdout":null},{"ctime":1469805221.996,"stderr":null,"status":-2,"mtime":1469805221.996,"_id":{"$oid":"579b72a5eb6af86a8f5220f2"},"node":null,"params":{"migration":"foo","user":"matt"},"queue":{"$oid":"56eade3aeb6af81e0123ed21"},"stdout":null}]
+
+The option C<--limit> can be used to change the maxinum number of documents returned.
+The option C<--skip> can be used to skip that number of documents in returned results.
+
+The option C<--noterse> can be used to disable terse mode (on by default).
+If enabled, the GridFS id or C<"[terse mode]"> will be returned for C<stdout> and C<stderr> of each document.
+If disabled, the full content of C<stdout> and C<stderr> will be returned.
+
+The option C<--epoch> will return C<ctime> and C<mtime> as FIXME instead of FIXME.
+
+The option C<--pretty> can be used to have the response pretty-printed.
+
+If the option C<--count> is used, returns a count of the matching task documents instead.
+
+  $ disbatch tasks '{"queue":"56eade3aeb6af81e0123ed21"}' --count
+  2 tasks
+
+Error examples:
+
+  $ disbatch tasks '[]'
+  Invalid filter is not a JSON object: '[]'
+  $ disbatch tasks '{"status":-2}'
+  Error getting http://localhost:3002/tasks.json (400 Bad Request): {"error":"non-indexed params given","indexes":[["id"],["node","status","queue","id"],["queue","status"]],"invalid_params":["status"],"path":"/tasks.json","title":"Disbatch Tasks Query"}
+
+=cut
+
 =item search [<json_filter>] [--options <options>] [--count | --terse]
+
+DEPRECATED: requires Disbatch::Web::Tasks. use the new tasks command above.
 
 Returns a JSON array of task documents matching the JSON query given. Note that blessed values may be munged to be proper JSON. Limit of C<100> documents returned.
 

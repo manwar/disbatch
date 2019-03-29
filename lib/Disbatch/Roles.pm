@@ -27,7 +27,7 @@ sub new {
         disbatch_web => {
             password => $self->{disbatch_web},
             privileges => [
-                { resource => { db => $self->{db}{name}, collection => '' }, actions => [ 'find' ] },
+                { resource => { db => $self->{db}{name}, collection => '' }, actions => [ 'find', 'listIndexes' ] },
                 { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'find', 'update' ] },
                 { resource => { db => $self->{db}{name}, collection => 'queues' },  actions => [ 'insert', 'update', 'remove' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'insert' ] },

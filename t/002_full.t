@@ -13,7 +13,7 @@ use MongoDB 1.0.4;
 use Net::HTTP::Client;
 use POSIX qw(setsid);
 use Sys::Hostname;
-use Try::Tiny::Retry;
+use Try::Tiny::Retry ':all';
 
 use lib 'lib';
 use Disbatch;
@@ -22,6 +22,7 @@ use Disbatch::Web;
 
 my $use_ssl = $ENV{USE_SSL} // 1;
 my $use_auth = $ENV{USE_AUTH} // 1;
+my $use_Disbatch_Web_Tasks = $ENV{V400_API} // 1;
 
 if (!$ENV{AUTHOR_TESTING} or $ENV{SKIP_FULL_TESTS}) {
     plan skip_all => 'Skipping author tests';
@@ -54,6 +55,10 @@ my $config = {
         plugin => 'qwerty4',		# { username => 'plugin', password => 'qwerty3' },
     },
     plugins => [ 'Disbatch::Plugin::Demo' ],
+    web_extensions => {
+        #"Disbatch::Web::Tasks" => undef,	# deprecated v4 routes: POST /tasks/search, POST /tasks/:queue, POST /tasks/:queue/:collection
+        #"Disbatch::Web::Old" => undef,		# deprecated v3 routes: *-json, not tested
+    },
     web_root => 'etc/disbatch/htdocs/',
     task_runner => './bin/task_runner',
     testing => 1,	# for task_runner to use lib 'lib'
@@ -76,6 +81,7 @@ my $config = {
 };
 delete $config->{auth} unless $use_auth;
 delete $config->{attributes} unless $use_ssl;
+$config->{web_extensions}{'Disbatch::Web::Tasks'} = undef if $use_Disbatch_Web_Tasks;	# deprecated v4 routes: POST /tasks/search, POST /tasks/:queue, POST /tasks/:queue/:collection
 
 mkdir "/tmp/$config->{database}";
 my $config_file = "/tmp/$config->{database}/config.json";
@@ -291,20 +297,21 @@ if ($webpid == 0) {
     ok defined $content->{id}{'$oid'}, 'id defined';
     $queueid = $content->{id}{'$oid'};
 
+    my @task_ids;
+    # new API
     # Returns {ref $res: Object}
-    $data = [ {commands => 'a'}, {commands => 'b'}, {commands => 'c'} ];
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/$queueid", 'Content-Type' => 'application/json', encode_json($data));
+    $data = { queue => $name, params => [ {commands => 'a'}, {commands => 'b'}, {commands => 'c'} ] };
+    $res = Net::HTTP::Client->request(POST => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
     is ref $content, 'HASH', 'content is HASH';
     is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
     is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 3, 'count';
-    my @task_ids = map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
-
-    # Returns {ref $res: Object}
-    $data = [ {commands => 'a'}, {commands => 'b'} ];
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/$name", 'Content-Type' => 'application/json', encode_json($data));
+    push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    # new API
+    $data = { queue => $queueid, params => [ {commands => 'a'}, {commands => 'b'} ] };
+    $res = Net::HTTP::Client->request(POST => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
@@ -312,38 +319,103 @@ if ($webpid == 0) {
     is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
     is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
     push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # old API
+        # Returns {ref $res: Object}
+        $data = [ {commands => 'c'}, {commands => 'd'}, {commands => 'e'} ];
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/$name", 'Content-Type' => 'application/json', encode_json($data));	# NOTE: POST /tasks/$queueid deprecated and no longer tested
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
+        is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 3, 'count';
+        push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+        # old API deprecated
+        # Returns {ref $res: Object}
+        $data = [ {commands => 'c'}, {commands => 'd'} ];
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/$queueid", 'Content-Type' => 'application/json', encode_json($data));	# NOTE: DEPRECATED: POST /tasks/$queueid deprecated
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
+        is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
+        push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    }
 
-    # {filter: filter, options: options, count: count, terse: terse}
-    $data = { filter => { queue => $queueid }, count => 1 };
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+    # new API
+    $data = { queue => $queueid, '.count' => 1 };
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
     is ref $content, 'HASH', 'content is HASH';
     is $content->{count}, scalar @task_ids, 'count';
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # {filter: filter, options: options, count: count, terse: terse}
+        # old API
+        $data = { filter => { queue => $queueid }, count => 1 };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{count}, scalar @task_ids, 'count';
+    }
 
-    $data = { filter => { queue => $queueid, 'params.commands' => 'b' }, count => 1 };
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+    # new API: NOTE: this search is invalid, since 'params.commands' is not indexed!
+    $data = { queue => $queueid, 'params.commands' => 'b', '.count' => 1 };
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
+    is $res->status_line, '400 Bad Request', '400 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is $content->{error}, 'non-indexed params given', 'error message';
+    is_deeply $content->{invalid_params}, ['params.commands'], 'invalid_params value';
+    # again, but with the index added:
+    $disbatch->tasks->indexes->create_one([ queue => 1, 'params.commands' => 1]);
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
     is ref $content, 'HASH', 'content is HASH';
     is $content->{count}, 2, 'count';
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # old API
+        $data = { filter => { queue => $queueid, 'params.commands' => 'b' }, count => 1 };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{count}, 2, 'count';
+    }
 
     # Returns array of tasks (empty if there is an error in the query), C<< [ status, $count_or_error ] >> if "count" is true, or C<< [ 0, error ] >> if other error.
     # All parameters are optional.
     # "filter" is the query. If you want to query by Object ID, use the key "id" and not "_id".
     # "limit" and "skip" are integers.
     # "count" and "terse" are booleans.
-    # {filter: filter, options: options, count: count, terse: terse}
-    $data = { filter => { %{$filter // {}}, queue => $queueid }, options => { limit => $limit, skip => $skip }, terse => $terse };
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+    # new API
+    $data = { %{$filter // {}}, queue => $queueid, '.limit' => $limit, '.skip' => $skip, '.terse' => $terse };
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
     is ref $content, 'ARRAY', 'content is ARRAY';
     is scalar @{$content}, scalar @task_ids, 'count';
-    #say Dumper $content;
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # {filter: filter, options: options, count: count, terse: terse}
+        # old API
+        $data = { filter => { %{$filter // {}}, queue => $queueid }, options => { limit => $limit, skip => $skip }, terse => $terse };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'ARRAY', 'content is ARRAY';
+        is scalar @{$content}, scalar @task_ids, 'count';
+    }
 
     # Returns {ref $res: Object}
     # "collection" is the name of the MongoDB collection to query.
@@ -352,8 +424,10 @@ if ($webpid == 0) {
     $collection = 'users';
     $filter = { migration => 'test' };
     $params = { user1 => 'document.username', migration => 'document.migration', commands => '*' };
-    $data =  { filter => $filter, params => $params };
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/$queueid/$collection", 'Content-Type' => 'application/json', encode_json($data));
+    # new API
+    # { "queue": queue, "params": generic_task_params, "collection": collection, "filter": collection_filter }
+    $data = { queue => $queueid, params => $params, collection => $collection, filter => $filter };
+    $res = Net::HTTP::Client->request(POST => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
@@ -361,8 +435,22 @@ if ($webpid == 0) {
     is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
     is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
     push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # old API
+        $data =  { filter => $filter, params => $params };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/$queueid/$collection", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
+        is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
+        push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    }
 
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/$name/$collection", 'Content-Type' => 'application/json', encode_json($data));
+    # new API
+    $data = { queue => $name, params => $params, collection => $collection, filter => $filter };
+    $res = Net::HTTP::Client->request(POST => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
@@ -370,6 +458,18 @@ if ($webpid == 0) {
     is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
     is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
     push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # old API
+        $data =  { filter => $filter, params => $params };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/$name/$collection", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{'MongoDB::InsertManyResult'}{acknowledged}, 1, 'success';
+        is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 2, 'count';
+        push @task_ids, map { $_->{_id}{'$oid'} } @{$content->{'MongoDB::InsertManyResult'}{inserted}};
+    }
 
     $res = Net::HTTP::Client->request(GET => "$uri/queues");
     is $res->status_line, '200 OK', '200 status';
@@ -427,22 +527,76 @@ if ($webpid == 0) {
     is $content->[0]{threads}, 0, 'threads';
 
     # Make sure queue count updated:
-    # {filter: filter, options: options, count: count, terse: terse}
-    $data = { filter => { queue => $queueid, status => -2 }, count => 1 };
-    $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+    # new API
+    $data = { queue => $queueid, status => -2, '.count' => 1 };
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
     is $res->status_line, '200 OK', '200 status';
     is $res->content_type, 'application/json', 'application/json';
     $content = decode_json($res->content);
     is ref $content, 'HASH', 'content is HASH';
     is $content->{count}, scalar @task_ids - 1, 'count';
+    if (exists $config->{web_extensions}{'Disbatch::Web::Tasks'}) {
+        # old API
+        # {filter: filter, options: options, count: count, terse: terse}
+        $data = { filter => { queue => $queueid, status => -2 }, count => 1 };
+        $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+        is $res->status_line, '200 OK', '200 status';
+        is $res->content_type, 'application/json', 'application/json';
+        $content = decode_json($res->content);
+        is ref $content, 'HASH', 'content is HASH';
+        is $content->{count}, scalar @task_ids - 1, 'count';
+    }
 
     # Get report for task:
     my $report = retry { $disbatch->mongo->coll('reports')->find_one() or die 'No report found' } catch { warn $_; {} };	# status done task_id
     is $report->{status}, 'SUCCESS', 'report success';
 
     # Get task of report:
-    my $task = $disbatch->tasks->find_one({_id => $report->{task_id}});
+    my $task = retry { $disbatch->tasks->find_one({_id => $report->{task_id}, status => {'$ne' => 0}}) or die 'status still 0' } delay_exp { 5, 5e5 } catch { warn $_; $disbatch->tasks->find_one({_id => $report->{task_id}}) };
     is $task->{status}, 1, 'task success';
+
+    # GET /tasks/:id
+    my $success_id = $task->{_id}->to_string;
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks/$success_id");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is $content->{_id}{'$oid'}, $task->{_id}->to_string, 'oid matches';
+    is $content->{status}, $task->{status}, 'status matches';
+    is $content->{stdout}, $task->{stdout}, 'stdout matches';
+
+    # GET /tasks/:id (web)
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks/$success_id", Accept => 'text/html');
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'text/html', 'text/html';
+    like $res->content, qr|<h1> Disbatch Single Task Query Results </h1>.+Results returned: 1<br />.+"\$oid" : "$success_id"|s, 'html response';
+
+    # GET /tasks/:id
+    my ($queued_id) = grep {  $_ ne $success_id } @task_ids;
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks/$queued_id");
+    is $res->status_line, '200 OK', '200 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is $content->{_id}{'$oid'}, $queued_id, 'oid matches';
+    is $content->{status}, -2, 'status is -2';
+    is $content->{stdout}, undef, 'stdout is undef';
+
+    # GET /tasks/:id
+    my $zero_id = '000000000000000000000000';
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks/$zero_id");
+    is $res->status_line, '404 Not Found', '404 status';
+    is $res->content_type, 'application/json', 'application/json';
+    $content = decode_json($res->content);
+    is ref $content, 'HASH', 'content is HASH';
+    is_deeply $content, {error => "no task with id $zero_id" }, 'error message';
+
+    # GET /tasks/:id (web)
+    $res = Net::HTTP::Client->request(GET => "$uri/tasks/$zero_id", Accept => 'text/html');
+    is $res->status_line, '404 Not Found', '404 status';
+    is $res->content_type, 'text/html', 'text/html';
+    like $res->content, qr|<h1> Disbatch Single Task Query Results </h1>.+<pre>Document\(s\) not found.</pre>|s, 'html response';
 
     # Returns hash: {ref $res: Object}
     $res = Net::HTTP::Client->request(DELETE => "$uri/queues/$queueid");
@@ -500,8 +654,8 @@ if ($webpid == 0) {
         $disbatch->{config}{gfs} = $gfs;
         for my $key (keys  %$gfs_tests) {
             #note "GFS: $gfs $key $gfs_tests->{$key}{$gfs}[0] $gfs_tests->{$key}{$gfs}[1]";
-            $data = [ {commands => $key} ];
-            $res = Net::HTTP::Client->request(POST => "$uri/tasks/$name", 'Content-Type' => 'application/json', encode_json($data));
+            $data = { queue => $name, params => [ {commands => $key} ] };
+            $res = Net::HTTP::Client->request(POST => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
             is $res->status_line, '200 OK', '200 status';
             $content = decode_json($res->content);
             is scalar @{$content->{'MongoDB::InsertManyResult'}{inserted}}, 1, 'count';
@@ -512,13 +666,17 @@ if ($webpid == 0) {
             $disbatch->process_queues;
 
             # get task, verify if stdout and stderr is in task or gfs
-            $data = { filter => { _id => $task_id, queue => $queueid, 'params.commands' => $key }};
+            $data = { id => $task_id->{'$oid'}, queue => $queueid, 'params.commands' => $key};
             my $max = 10;
             my $c = 0;
             do {
                 select(undef, undef, undef, 0.5);
-                $res = Net::HTTP::Client->request(POST => "$uri/tasks/search", 'Content-Type' => 'application/json', encode_json($data));
+                $res = Net::HTTP::Client->request(GET => "$uri/tasks", 'Content-Type' => 'application/json', encode_json($data));
                 $content = decode_json($res->content);
+                if (ref $content ne 'ARRAY') {
+                    warn Dumper $content;
+                    BAIL_OUT("content is not an ARRAY");
+                }
                 note "status is $content->[0]{status}";
                 if ($content->[0]{status} > 0) {
                     $c++;
@@ -526,7 +684,7 @@ if ($webpid == 0) {
                 }
             } while (!exists $content->[0]{complete});
             is $res->status_line, '200 OK', '200 status';
-            #is $res->content_type, 'application/json', 'application/json';
+            is $res->content_type, 'application/json', 'application/json';
             is ref $content, 'ARRAY', 'content is ARRAY';
             is scalar @$content, 1, 'count';
             is $content->[0]{status}, 1, 'status 1';
