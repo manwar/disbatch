@@ -35,9 +35,9 @@ my $additional_perms = Cpanel::JSON::XS->new->relaxed->decode(scalar read_file $
 die "No mongohost name in $config_file" unless $config->{mongohost};
 die "No database name in $config_file" unless $config->{database};
 die "No auth hash in $config_file" unless $config->{auth} and ref $config->{auth} eq 'HASH';
-die "No auth.disbatchd password in $config_file" unless $config->{auth}{disbatchd};
-die "No auth.disbatch_web password in $config_file" unless $config->{auth}{disbatch_web};
-die "No auth.task_runner password in $config_file" unless $config->{auth}{task_runner};
+for my $username (@Disbatch::Roles::usernames) {
+     die "No auth.$username password in $config_file" unless $config->{auth}{$username};
+}
 
 print "Enter password for $root_user:";
 ReadMode('noecho');
@@ -56,11 +56,11 @@ $config->{attributes}{password} = $root_password;
 my $test_db_root = MongoDB->connect($config->{mongohost}, $config->{attributes})->get_database($config->{database});
 my $roles = Disbatch::Roles->new(db => $test_db_root, plugin_perms => $plugin_perms, additional_perms => $additional_perms, %{$config->{auth}});
 if ($drop_roles // 0) {
-    say "Dropping the following roles and users in database '$config->{database}' on $config->{mongohost}: disbatchd, disbatch_web, task_runner";
+    say "Dropping the following roles and users in database '$config->{database}' on $config->{mongohost}: ", join ', ', sort keys %{$roles->{userroles}};
     $roles->drop_roles_and_users;
 }
 try {
-    say "Creating the following roles and users in database '$config->{database}' on $config->{mongohost}: disbatchd, disbatch_web, task_runner";
+    say "Creating the following roles and users in database '$config->{database}' on $config->{mongohost}: ", join ', ', sort keys %{$roles->{userroles}};
     $roles->create_roles_and_users;
     say "Successfully created roles and users.";
 } catch {

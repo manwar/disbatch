@@ -6,18 +6,20 @@ use warnings;
 use Safe::Isa;
 use Try::Tiny;
 
+our @usernames = qw/ disbatchd disbatch_web task_runner queuebalance plugin /;
+
 sub new {
     my $class = shift;
     my $self = { @_ };
     die "A MongoDB::Database object must be passed as 'db'" unless ref ($self->{db} // '') eq 'MongoDB::Database';
-    die "Passwords for accounts must be passed as 'disbatchd', 'disbatch_web', 'task_runner', 'queuebalance', and 'plugin'" unless $self->{disbatchd} and $self->{disbatch_web} and $self->{task_runner} and $self->{queuebalance} and $self->{plugin};
+    die "Passwords for accounts must be passed as '", join("', '", @usernames), "'" unless scalar(grep { $self->{$_} ? 1 : 0 } @usernames) eq scalar @usernames;
 
     $self->{userroles} = {
         disbatchd => {
             password => $self->{disbatchd},
             privileges => [
                 { resource => { db => $self->{db}{name}, collection => '' }, actions => [ 'find' ] },
-                { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'find', 'insert', 'update', 'createIndex' ] },
+                { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'insert', 'update', 'createIndex' ] },
                 { resource => { db => $self->{db}{name}, collection => 'queues' },  actions => [ 'update', 'createIndex' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'update', 'createIndex' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks.chunks' },  actions => [ 'createIndex' ] },
@@ -29,7 +31,7 @@ sub new {
             privileges => [
                 { resource => { db => $self->{db}{name}, collection => '' }, actions => [ 'find', 'listIndexes' ] },
                 { resource => { db => $self->{db}{name}, collection => 'balance' },  actions => [ 'insert', 'update' ] },	# insert needed because 'upsert'
-                { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'find', 'update' ] },
+                { resource => { db => $self->{db}{name}, collection => 'nodes' },  actions => [ 'update' ] },
                 { resource => { db => $self->{db}{name}, collection => 'queues' },  actions => [ 'insert', 'update', 'remove' ] },
                 { resource => { db => $self->{db}{name}, collection => 'tasks' },  actions => [ 'insert' ] },
             ],
@@ -57,6 +59,7 @@ sub new {
             privileges => [ map { { resource => { db => $self->{db}{name}, collection => $_ }, actions => $self->{plugin_perms}{$_} } } keys %{$self->{plugin_perms}} ],
         },
     };
+    die "CODE ERROR: Keys in \$self->{userroles} do not match values in \@usernames!" unless join(',', sort @usernames) eq join(',', sort keys %{$self->{userroles}});
     bless $self, $class;
 }
 
