@@ -11,10 +11,9 @@ use Disbatch;
 use Disbatch::Web::Query;
 use Exporter qw/ import /;
 use File::Slurp;
-use Limper::SendFile;
+use Limper::SendFile;	# needed for public()
 use Limper::SendJSON;
 use Limper;
-use Log::Log4perl;
 use MongoDB::OID 1.0.4;
 use Safe::Isa;
 use Template;

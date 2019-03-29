@@ -16,8 +16,6 @@ use Sys::Hostname;
 use Time::Moment;
 use Try::Tiny::Retry;
 
-my $json = Cpanel::JSON::XS->new->utf8;
-
 my $default_log4perl = {
     level => 'DEBUG',	# 'TRACE'
     appenders => {
@@ -73,7 +71,7 @@ sub mongo {
         $attributes{password} = $self->{config}{auth}{$username};
         $attributes{db_name} = $self->{config}{database};
     }
-    warn "Connecting ", scalar localtime;
+    warn "Connecting ", scalar(localtime), "\n";
     $self->{mongo} = MongoDB->connect($self->{config}{mongohost}, \%attributes)->get_database($self->{config}{database}) ;
 }
 sub nodes  { $_[0]->mongo->coll('nodes') }
@@ -87,7 +85,7 @@ sub load_config {
     my ($self) = @_;
     if (!defined $self->{config}) {
         $self->{config} = try {
-            $json->relaxed->decode(scalar read_file($self->{config_file}));
+            Cpanel::JSON::XS->new->utf8->relaxed->decode(scalar read_file($self->{config_file}));
         } catch {
             $self->{config}{log4perl} = $default_log4perl;
             $self->logger->logdie("Could not parse $self->{config_file}: $_");
