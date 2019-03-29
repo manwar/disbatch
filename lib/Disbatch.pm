@@ -369,8 +369,8 @@ sub put_gfs {
         uploadDate => DateTime->now,
         filename   => $filename,
         chunkSize  => $chunk_size,
-        length     => length encode_utf8($content),
-        md5        => Digest::MD5->new->add(encode_utf8($content))->hexdigest,
+        length     => defined $content ? length encode_utf8($content) : 0,
+        md5        => Digest::MD5->new->add(defined $content ? encode_utf8($content) : '')->hexdigest,
     };
     if (defined $metadata) {
         die 'metadata must be a HASH' unless ref $metadata eq 'HASH';
