@@ -16,8 +16,13 @@ For new features to work, the config file must be updated and
   - Rerun `disbatch-create-users`
 
 - For the deprecated routes to work:
-  - Uncomment values in `web_extensions` in the config file for
-    `Disbatch::Web::Tasks` and `Disbatch::Web::V3`
+  - Add this `web_extensions` section to the config file and uncomment as
+    necessary:
+
+                "web_extensions": {
+                    #"Disbatch::Web::Tasks": null,  # deprecated v4 routes: POST /tasks/search, POST /tasks/:queue, POST /tasks/:queue/:collection
+                    #"Disbatch::Web::V3": null,     # deprecated v3 routes: *-json
+                },
 
 - Rerun `disbatch-create-users`:
   - See `perldoc disbatch-create-users` for more options. If you did the
