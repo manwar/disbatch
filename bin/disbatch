@@ -195,9 +195,15 @@ sub post_tasks {	# <queue> <json_array>					# JSON array of task params objects
 			# --collection <collection> <queue> <json_object>	# {filter: filter, params: params}
     my ($queue, $data) = @ARGV;
     die "Queue name not given\n" unless defined $queue;
-    my $full_url = "$url/tasks/$queue";
-    $full_url .= "/$collection" if defined $collection;
-    my $response = $ua->post($full_url, 'Content-Type' => 'application/json', Content => $data // '{}');
+    # gotta decode and modify $data for new API
+    $data = $json->decode($data // '{}');
+    if (defined $collection) {
+        $data->{collection} = $collection;
+        $data->{queue} = $queue;
+    } else {
+        $data = { queue => $queue, params => $data };
+    }
+    my $response = $ua->post("$url/tasks", 'Content-Type' => 'application/json', Content => $json->encode($data));
     if ($response->is_success) {
         my $result = $json->decode($response->decoded_content);
         if ($result->{'MongoDB::InsertManyResult'}{inserted}) {
@@ -208,7 +214,7 @@ sub post_tasks {	# <queue> <json_array>					# JSON array of task params objects
             say "No change to queue $queue: ";
         }
     } else {
-        die "Error posting $full_url (", $response->status_line, '): ', $response->decoded_content, "\n";
+        die "Error posting $url/tasks (", $response->status_line, '): ', $response->decoded_content, "\n";
     }
 }
 
