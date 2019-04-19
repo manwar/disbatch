@@ -153,8 +153,10 @@
                 [% param_string = param_list.join('&') %]
                 [% IF json.status == -4 OR json.status == 0 %]
                 <input type="button" value="Cancel this task" onclick="modifyDocument('cancel', '[% mypath %]')" />
-                [% ELSIF json.status == -2 OR json.status == -1 %]
+                <!--
+                [%# ELSIF json.status == -2 OR json.status == -1 %]
                 <input type="button" value="Delete this task" onclick="modifyDocument('delete', '[% mypath %]')" />
+                -->
                 [% ELSIF json.status %]
                 <input type="button" value="Clone this task" onclick="window.location = '[% request.headers.$prepend %]/migration/create?[% param_string %]'" />
                 [% END %]
