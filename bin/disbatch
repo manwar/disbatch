@@ -65,7 +65,7 @@ if (defined $ssl_ca_file) {
 } else {
     # Note: the SSL settings are for MongoDB, but ideally if using SSL with MongoDB, it is also being used with the DCI
     # try loading the config file, but don't fail if it doesn't exist
-    my $config = try { $json->relaxed->decode(scalar read_file $config_file) } catch { {} };
+    my $config = try { Cpanel::JSON::XS->new->utf8->relaxed->decode(scalar read_file $config_file) } catch { {} };
     if (defined $config->{attributes}{ssl}) {
         $ua_options->{ssl_opts} = $config->{attributes}{ssl};
         $ua_options->{ssl_opts}{verify_hostname} = $ua_options->{ssl_opts}{SSL_verify_mode} if defined $ua_options->{ssl_opts}{SSL_verify_mode};
