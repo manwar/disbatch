@@ -50,13 +50,13 @@ sub init {
     public ($disbatch->{config}{web_root} // '/etc/disbatch/htdocs/');
     for my $plugin (keys %{$disbatch->{config}{web_extensions} // {}}) {
         if ($plugin !~ /^[\w:]+$/) {
-            $disbatch->logger->error("Illegal plugin value: $plugin, ignored");
+            Limper::warning "Illegal plugin value: $plugin, ignored";
         } elsif (eval "require $plugin") {
-            $disbatch->logger->info("$plugin found and loaded");
+            Limper::info "$plugin found and loaded";
             no strict 'refs';
             ${"${plugin}::"}{init}->($disbatch, $disbatch->{config}{web_extensions}{$plugin}) if $plugin->can('init');
         } else {
-            $disbatch->logger->warn("Could not load $plugin, ignored");
+            Limper::warning "Could not load $plugin, ignored";
         }
     }
     require Disbatch::Web::Files;	# this has a catch-all to send any matching file in the public root directory, so must be loaded last.
