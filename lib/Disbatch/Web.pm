@@ -84,7 +84,7 @@ sub parse_accept {
 
 sub want_json {
     my $accept = parse_accept;
-    # prefer 'text/html over 'application/json' if equal, but default to 'application/json'
+    # prefer 'text/html' over 'application/json' if equal, but default to 'application/json'
     ($accept->{'text/html'} // 0) >= ($accept->{'application/json'} // 1) ? 0 : 1;
 }
 
