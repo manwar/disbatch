@@ -96,7 +96,7 @@ get '/' => sub {
     # NOTE: not doing just "template 'index.tt', $params;" because not using WRAPPER here
     my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => $disbatch->{config}{views_dir} // '/etc/disbatch/views/', START_TAG => '\[%', END_TAG => '%\]');
     my $output = '';
-    my $params = {};
+    my $params = { database => $disbatch->{config}{database}, web_extensions => [sort keys %{$disbatch->{config}{web_extensions} // {}}], get_routes => [ grep { m{^/} } sort keys +{@{Limper::routes('GET')}} ] };
     $tt->process('index.tt', $params, \$output) || die $tt->error();
     headers 'Content-Type' => 'text/html';
     $output;
