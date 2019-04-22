@@ -6,11 +6,6 @@ use warnings;
 use Limper::SendFile;
 use Limper;
 
-get '/' => sub {
-    send_file '/index.html';
-};
-
-
 get qr{^/} => sub {
     send_file request->{path};        # sends request->{uri} by default
 };
@@ -31,10 +26,6 @@ These routes were formerly in L<Disbatch::Web>, but moved here. They are loaded 
 =head1 BROWSER ROUTES
 
 =over 2
-
-=item GET /
-
-Returns the contents of "/index.html" – the queue browser page.
 
 =item GET qr{^/}
 

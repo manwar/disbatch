@@ -92,6 +92,16 @@ sub want_json {
 #### NEW API ###
 ################
 
+get '/' => sub {
+    # NOTE: not doing just "template 'index.tt', $params;" because not using WRAPPER here
+    my $tt = Template->new(ANYCASE => 1, ABSOLUTE => 1, ENCODING => 'utf8', INCLUDE_PATH => $disbatch->{config}{views_dir} // '/etc/disbatch/views/', START_TAG => '\[%', END_TAG => '%\]');
+    my $output = '';
+    my $params = {};
+    $tt->process('index.tt', $params, \$output) || die $tt->error();
+    headers 'Content-Type' => 'text/html';
+    $output;
+};
+
 sub datetime_to_millisecond_epoch {
     int($_[0]->hires_epoch * 1000);
 }
@@ -1210,8 +1220,6 @@ For examples see L<Disbatch::Web::Files> (which is automatically loaded at the e
 
 =head1 BROWSER ROUTES
 
-Note: these are loaded from L<Disbatch::Web::Files>.
-
 =over 2
 
 =item GET /
@@ -1221,6 +1229,8 @@ Returns the contents of "/index.html" – the queue browser page.
 =item GET qr{^/}
 
 Returns the contents of the request path.
+
+Note: this is loaded from L<Disbatch::Web::Files>.
 
 =back
 
