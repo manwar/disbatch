@@ -102,6 +102,17 @@ get '/' => sub {
     $output;
 };
 
+get '/info' => sub {
+    my $routes = Limper::routes;	# WARNING: do not modify $routes, it is a footgun!
+    my %routes;
+    for my $verb (keys %$routes) {
+        # this takes just the even elements of @{$routes->{$verb}} and ensures they are strings, keeping their order
+        $routes{$verb} = [ map { $routes->{$verb}[$_*2] . "" } (0..@{$routes->{$verb}}/2-1) ];
+    }
+    my $info = { database => $disbatch->{config}{database}, web_extensions => [sort keys %{$disbatch->{config}{web_extensions} // {}}], routes => \%routes };
+    send_json $info, send_json_options;
+};
+
 sub datetime_to_millisecond_epoch {
     int($_[0]->hires_epoch * 1000);
 }
@@ -1001,6 +1012,15 @@ NOTE: I hate this code. Read it to determine the formats it might return.
 NOTE: all JSON routes use C<send_json_options>, documented above.
 
 =over 2
+
+=item GET /info
+
+Parameters: none.
+
+Returns an object with the following fields: C<database> (the name of the MongoDB database used), C<web_extensions> (an array of configured web extensions for custom routes),
+and C<routes> (an object where fields are HTTP verbs and values are routes in the ordered configured).
+
+Note: new in Disbatch 4.2
 
 =item GET /nodes
 
