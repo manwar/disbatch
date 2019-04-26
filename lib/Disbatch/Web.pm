@@ -12,7 +12,7 @@ use Exporter qw/ import /;
 use File::Slurp;
 use Limper::SendFile;	# needed for public()
 use Limper::SendJSON;
-use Limper;
+use Limper 0.014;
 use MongoDB::OID 1.0.4;
 use Safe::Isa;
 use Scalar::Util qw/ looks_like_number /;

@@ -12,7 +12,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-BUILD
 BuildArch: noarch
 BuildRequires: perl >= 0:5.01204
 
-Requires: perl(Limper::Engine::PSGI) perl(Starman) perl(File::Find::Rule)
+Requires: perl(Limper::Engine::PSGI) perl(Starman) perl(Template::Plugin::SimpleJson) perl(Daemon::Control)
 
 %description
 <% $zilla->abstract %>
