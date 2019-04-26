@@ -57,9 +57,7 @@ install -D -m0644 etc/logrotate.d/disbatch %{buildroot}/etc/logrotate.d/disbatch
 
 %post
 /sbin/chkconfig --add disbatchd
-/sbin/chkconfig disbatchd on
 /sbin/chkconfig --add disbatch-webd
-/sbin/chkconfig disbatch-webd on
 
 %preun
 if [ $1 -lt 1 ]; then
