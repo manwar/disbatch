@@ -4,7 +4,7 @@
 [% prepend = "x-prepend" %]
     <head>
         <meta http-equiv="Content-type" content="text/html; charset=[% settings.charset %]" />
-        <title>Synacor Migrations</title>
+        <title>Disbatch</title>
         <link rel="stylesheet" href="[% request.headers.$prepend %]/css/style.css" />
         <script language="javascript" src="[% request.headers.$prepend %]/javascripts/jquery.js" type="text/javascript"></script>
         <script language="javascript" src="[% request.headers.$prepend %]/javascripts/expander.js" type="text/javascript"></script>
