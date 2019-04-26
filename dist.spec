@@ -58,6 +58,7 @@ install -D -m0644 etc/logrotate.d/disbatch %{buildroot}/etc/logrotate.d/disbatch
 %post
 /sbin/chkconfig --add disbatchd
 /sbin/chkconfig --add disbatch-webd
+/sbin/chkconfig --add queuebalanced
 
 %preun
 if [ $1 -lt 1 ]; then
@@ -65,6 +66,8 @@ if [ $1 -lt 1 ]; then
 	/sbin/chkconfig --del disbatchd
 	/sbin/service disbatch-webd stop > /dev/null 2>&1
 	/sbin/chkconfig --del disbatch-webd
+	/sbin/service queuebalanced stop > /dev/null 2>&1
+	/sbin/chkconfig --del queuebalanced
 fi
 
 %clean
