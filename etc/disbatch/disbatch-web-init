@@ -8,7 +8,7 @@ my @program_args = ('--listen' => '127.0.0.1:8080', '--workers' => 10, '/etc/dis
 
 Daemon::Control->new({
     name         => 'disbatch-web',
-    program      => 'starman',
+    program      => 'starwoman',
     program_args => \@program_args,
     directory    => '/',
 
